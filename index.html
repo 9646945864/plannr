@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plannr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <h1 class="wordmark">Plannr</h1>
+    <p class="tagline">Tell it what you need to do. It finds the time.</p>
+  </header>
+
+  <main>
+    <section class="input-section" aria-label="Add a task">
+      <form id="task-form" class="task-form">
+        <input
+          type="text"
+          id="task-input"
+          placeholder="e.g. Study for chem test Thursday, need 3 hours, prefer evenings"
+          autocomplete="off"
+          required
+        >
+        <button type="submit" id="task-submit">Add to week</button>
+      </form>
+      <p id="status-line" class="status-line" aria-live="polite"></p>
+    </section>
+
+    <section class="week-section" aria-label="This week">
+      <div class="week-nav">
+        <button id="prev-week" class="week-nav-btn" aria-label="Previous week">&larr;</button>
+        <h2 id="week-label" class="week-label"></h2>
+        <button id="next-week" class="week-nav-btn" aria-label="Next week">&rarr;</button>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
