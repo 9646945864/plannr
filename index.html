@@ -11,36 +11,35 @@
 </head>
 <body class="landing">
 
-  <!-- SECTION 1: Hero / logo -->
+  <!-- SECTION 1: Hero — logo, description, calendar preview -->
   <section class="hero-section">
     <div class="logo logo-hero" aria-label="Plannr logo">
-      <svg viewBox="0 0 280 70" class="logo-svg" role="img" aria-hidden="true">
+      <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
         <text x="4" y="44" class="logo-text">PLANNR</text>
-        <polygon points="0,56 240,56 226,64 0,64" class="logo-bar"></polygon>
       </svg>
     </div>
-    <p class="hero-tagline">Tell it what you need to do. It finds the time.</p>
-    <button class="scroll-cue" id="scroll-cue" aria-label="Scroll to see how it works">
+
+    <p class="hero-description">
+      Plannr is an AI-assisted weekly planner built for students. Tell it
+      what you need to do in plain English — Plannr reads it, finds an
+      open slot before your deadline, and puts it on your calendar for you.
+    </p>
+
+    <div class="preview-calendar" id="preview-calendar" aria-label="Example of a scheduled week in Plannr"></div>
+
+    <a href="#signin-section" class="scroll-cue" id="scroll-cue">
       <span>See how it works</span>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M3 6L8 11L13 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-    </button>
+    </a>
   </section>
 
-  <!-- SECTION 2: Calendar preview -->
-  <section class="preview-section">
-    <h2 class="preview-heading">Your week, laid out for you</h2>
-    <p class="preview-sub">Type a task in plain English — Plannr finds the open slot and puts it on your calendar.</p>
-    <div class="preview-calendar" id="preview-calendar" aria-hidden="true"></div>
-  </section>
-
-  <!-- SECTION 3: Sign in -->
+  <!-- SECTION 2: Sign in -->
   <section class="signin-section" id="signin-section">
     <div class="logo logo-small" aria-label="Plannr logo">
-      <svg viewBox="0 0 280 70" class="logo-svg" role="img" aria-hidden="true">
+      <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
         <text x="4" y="44" class="logo-text">PLANNR</text>
-        <polygon points="0,56 240,56 226,64 0,64" class="logo-bar"></polygon>
       </svg>
     </div>
     <form class="signin-form" id="signin-form">
