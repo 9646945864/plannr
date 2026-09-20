@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plannr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Shrikhand&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="landing">
+
+  <!-- SECTION 1: Hero / logo -->
+  <section class="hero-section">
+    <div class="logo logo-hero" aria-label="Plannr logo">
+      <svg viewBox="0 0 280 70" class="logo-svg" role="img" aria-hidden="true">
+        <text x="4" y="44" class="logo-text">PLANNR</text>
+        <polygon points="0,56 240,56 226,64 0,64" class="logo-bar"></polygon>
+      </svg>
+    </div>
+    <p class="hero-tagline">Tell it what you need to do. It finds the time.</p>
+    <button class="scroll-cue" id="scroll-cue" aria-label="Scroll to see how it works">
+      <span>See how it works</span>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M3 6L8 11L13 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </section>
+
+  <!-- SECTION 2: Calendar preview -->
+  <section class="preview-section">
+    <h2 class="preview-heading">Your week, laid out for you</h2>
+    <p class="preview-sub">Type a task in plain English — Plannr finds the open slot and puts it on your calendar.</p>
+    <div class="preview-calendar" id="preview-calendar" aria-hidden="true"></div>
+  </section>
+
+  <!-- SECTION 3: Sign in -->
+  <section class="signin-section" id="signin-section">
+    <div class="logo logo-small" aria-label="Plannr logo">
+      <svg viewBox="0 0 280 70" class="logo-svg" role="img" aria-hidden="true">
+        <text x="4" y="44" class="logo-text">PLANNR</text>
+        <polygon points="0,56 240,56 226,64 0,64" class="logo-bar"></polygon>
+      </svg>
+    </div>
+    <form class="signin-form" id="signin-form">
+      <label class="signin-label" for="signin-email">Email</label>
+      <input type="email" id="signin-email" class="signin-input" placeholder="you@school.edu" autocomplete="email">
+
+      <label class="signin-label" for="signin-password">Password</label>
+      <input type="password" id="signin-password" class="signin-input" placeholder="••••••••" autocomplete="current-password">
+
+      <button type="submit" class="signin-btn">Sign in</button>
+      <p class="signin-note">This is a demo sign-in for the CAC prototype — it doesn't check real credentials yet. Any email/password takes you into the app.</p>
+    </form>
+  </section>
+
+  <script src="js/landing.js"></script>
+</body>
+</html>
