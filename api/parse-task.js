@@ -61,7 +61,7 @@ ${JSON.stringify(text)}
 
   try {
     const geminiResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" +
         encodeURIComponent(apiKey),
       {
         method: "POST",
