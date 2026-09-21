@@ -15,7 +15,7 @@
   <section class="hero-section">
     <div class="logo logo-hero" aria-label="Plannr logo">
       <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
-        <text x="4" y="44" class="logo-text">PLANNR</text>
+        <text x="140" y="44" text-anchor="middle" class="logo-text">PLANNR</text>
       </svg>
     </div>
 
@@ -25,7 +25,66 @@
       open slot before your deadline, and puts it on your calendar for you.
     </p>
 
-    <div class="preview-calendar" id="preview-calendar" aria-label="Example of a scheduled week in Plannr"></div>
+    <div class="preview-calendar" aria-label="Example of a scheduled week in Plannr">
+      <svg viewBox="0 0 700 300" class="preview-svg" role="img" aria-hidden="true">
+        <!-- day columns -->
+        <g class="preview-days">
+          <!-- Sun -->
+          <text x="45" y="18" class="preview-day-label">Sun</text>
+          <!-- Mon -->
+          <text x="145" y="18" class="preview-day-label">Mon</text>
+          <rect x="105" y="60" width="80" height="34" rx="4" class="preview-task-bg"></rect>
+          <rect x="105" y="60" width="4" height="34" class="preview-task-accent"></rect>
+          <text x="113" y="80" class="preview-task-label">Chem lecture</text>
+          <rect x="105" y="150" width="80" height="46" rx="4" class="preview-task-bg"></rect>
+          <rect x="105" y="150" width="4" height="46" class="preview-task-accent"></rect>
+          <text x="113" y="171" class="preview-task-label">Study for</text>
+          <text x="113" y="184" class="preview-task-label">test</text>
+          <!-- Tue -->
+          <text x="245" y="18" class="preview-day-label">Tue</text>
+          <rect x="205" y="110" width="80" height="26" rx="4" class="preview-task-bg"></rect>
+          <rect x="205" y="110" width="4" height="26" class="preview-task-accent"></rect>
+          <text x="213" y="127" class="preview-task-label">Club meeting</text>
+          <!-- Wed -->
+          <text x="345" y="18" class="preview-day-label">Wed</text>
+          <rect x="305" y="70" width="80" height="46" rx="4" class="preview-task-bg"></rect>
+          <rect x="305" y="70" width="4" height="46" class="preview-task-accent"></rect>
+          <text x="313" y="91" class="preview-task-label">Essay</text>
+          <text x="313" y="104" class="preview-task-label">draft</text>
+          <!-- Thu -->
+          <text x="445" y="18" class="preview-day-label">Thu</text>
+          <rect x="405" y="130" width="80" height="26" rx="4" class="preview-task-bg"></rect>
+          <rect x="405" y="130" width="4" height="26" class="preview-task-accent"></rect>
+          <text x="413" y="147" class="preview-task-label">Practice SATs</text>
+          <!-- Fri -->
+          <text x="545" y="18" class="preview-day-label">Fri</text>
+          <rect x="505" y="180" width="80" height="34" rx="4" class="preview-task-bg"></rect>
+          <rect x="505" y="180" width="4" height="34" class="preview-task-accent"></rect>
+          <text x="513" y="200" class="preview-task-label">Volunteer</text>
+          <!-- Sat -->
+          <text x="645" y="18" class="preview-day-label">Sat</text>
+        </g>
+        <!-- hour gridlines -->
+        <g class="preview-gridlines">
+          <line x1="0" y1="36" x2="700" y2="36"></line>
+          <line x1="0" y1="72" x2="700" y2="72"></line>
+          <line x1="0" y1="108" x2="700" y2="108"></line>
+          <line x1="0" y1="144" x2="700" y2="144"></line>
+          <line x1="0" y1="180" x2="700" y2="180"></line>
+          <line x1="0" y1="216" x2="700" y2="216"></line>
+          <line x1="0" y1="252" x2="700" y2="252"></line>
+        </g>
+        <!-- column separators -->
+        <g class="preview-columns">
+          <line x1="100" y1="30" x2="100" y2="270"></line>
+          <line x1="200" y1="30" x2="200" y2="270"></line>
+          <line x1="300" y1="30" x2="300" y2="270"></line>
+          <line x1="400" y1="30" x2="400" y2="270"></line>
+          <line x1="500" y1="30" x2="500" y2="270"></line>
+          <line x1="600" y1="30" x2="600" y2="270"></line>
+        </g>
+      </svg>
+    </div>
 
     <a href="#signin-section" class="scroll-cue" id="scroll-cue">
       <span>See how it works</span>
@@ -39,7 +98,7 @@
   <section class="signin-section" id="signin-section">
     <div class="logo logo-small" aria-label="Plannr logo">
       <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
-        <text x="4" y="44" class="logo-text">PLANNR</text>
+        <text x="140" y="44" text-anchor="middle" class="logo-text">PLANNR</text>
       </svg>
     </div>
     <form class="signin-form" id="signin-form">
