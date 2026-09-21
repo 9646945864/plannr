@@ -1,8 +1,6 @@
 /* ============================================================
    /api/parse-task
-   This runs on Vercel's server, NOT in the browser — so the
-   Gemini API key stays hidden. The frontend (js/app.js) calls
-   this endpoint instead of calling Gemini directly.
+   Parses natural-language tasks using Gemini.
    ============================================================ */
 
 export default async function handler(req, res) {
@@ -11,65 +9,147 @@ export default async function handler(req, res) {
   }
 
   const { text } = req.body || {};
+
   if (!text || typeof text !== "string") {
-    return res.status(400).json({ error: "Missing 'text' in request body" });
+    return res.status(400).json({
+      error: "Missing 'text' in request body",
+    });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
+
   if (!apiKey) {
-    return res.status(500).json({ error: "Server is missing GEMINI_API_KEY" });
+    return res.status(500).json({
+      error: "Server is missing GEMINI_API_KEY",
+    });
   }
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // The prompt is written to force clean, parseable JSON —
-  // no markdown fences, no extra commentary.
-  const prompt = `You are a task-parsing engine for a student planner app.
+  const prompt = `
+You are the task-parsing engine for an AI calendar app called Plannr.
+
 Today's date is ${today}.
 
-Read the following task description and return ONLY a JSON object
-(no markdown, no code fences, no extra text) with exactly these fields:
+Parse the user's task and return ONLY valid JSON.
+
+The JSON must have exactly these fields:
 
 {
-  "title": string,                // short, clean task name
-  "durationMinutes": number,      // your best estimate if not stated (default 60)
-  "deadline": string or null,     // "YYYY-MM-DD" — resolve relative dates like "Thursday" using today's date
-  "preferredTime": "morning" | "afternoon" | "evening" | null
+  "title": "short task name",
+  "durationMinutes": 60,
+  "deadline": "YYYY-MM-DD",
+  "preferredTime": "morning"
 }
 
-Task description: "${text}"`;
+Rules:
+
+- title should be short and clear.
+- durationMinutes should be a number.
+- If the user does not give a duration, estimate one.
+- If no duration is given, use 60 minutes.
+- deadline must be YYYY-MM-DD or null.
+- Resolve words such as today, tomorrow, Monday, Thursday, etc. using today's date.
+- preferredTime must be "morning", "afternoon", "evening", or null.
+- Do not include markdown.
+- Do not include explanations.
+- Return ONLY the JSON object.
+
+User task:
+${JSON.stringify(text)}
+`;
 
   try {
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+        encodeURIComponent(apiKey),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2 },
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+          },
         }),
       }
     );
 
     if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error("Gemini API error:", errText);
-      return res.status(502).json({ error: "Gemini API request failed" });
+      const errorText = await geminiResponse.text();
+
+      console.error("Gemini API error:", errorText);
+
+      return res.status(502).json({
+        error: "Gemini API request failed",
+      });
     }
 
     const data = await geminiResponse.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // Strip accidental markdown fences just in case the model adds them.
-    const cleaned = rawText.replace(/```json|```/g, "").trim();
+    const rawText =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    if (!rawText) {
+      console.error("Gemini returned no text:", data);
+
+      return res.status(502).json({
+        error: "Gemini returned an empty response",
+      });
+    }
 
     let parsed;
+
     try {
-      parsed = JSON.parse(cleaned);
+      parsed = JSON.parse(rawText);
     } catch (parseErr) {
-      console.error("Could not parse Gemini output as JSON:", rawText);
-      return res.status(502).json({ error: "Could not parse AI response" });
+      console.error("Invalid JSON from Gemini:", rawText);
+
+      return res.status(502).json({
+        error: "Could not parse AI response",
+      });
+    }
+
+    // Validate the response before sending it to the frontend.
+
+    if (typeof parsed.title !== "string") {
+      return res.status(502).json({
+        error: "AI returned an invalid title",
+      });
+    }
+
+    if (
+      typeof parsed.durationMinutes !== "number" ||
+      parsed.durationMinutes <= 0
+    ) {
+      parsed.durationMinutes = 60;
+    }
+
+    if (
+      parsed.preferredTime !== "morning" &&
+      parsed.preferredTime !== "afternoon" &&
+      parsed.preferredTime !== "evening" &&
+      parsed.preferredTime !== null
+    ) {
+      parsed.preferredTime = null;
+    }
+
+    if (
+      parsed.deadline !== null &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(parsed.deadline)
+    ) {
+      parsed.deadline = null;
     }
 
     return res.status(200).json({
@@ -80,6 +160,9 @@ Task description: "${text}"`;
     });
   } catch (err) {
     console.error("Server error:", err);
-    return res.status(500).json({ error: "Unexpected server error" });
+
+    return res.status(500).json({
+      error: "Unexpected server error",
+    });
   }
 }
