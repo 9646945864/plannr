@@ -89,12 +89,12 @@ ${JSON.stringify(text)}
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
 
-      console.error("Gemini API error:", errorText);
+      console.error("GEMINI ERROR:", errorText);
 
-      return res.status(502).json({
-        error: "Gemini API request failed",
+      return res.status(geminiResponse.status).json({
+       error: errorText,
       });
-    }
+   }
 
     const data = await geminiResponse.json();
 
