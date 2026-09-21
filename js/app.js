@@ -95,30 +95,158 @@ function preferredHourRange(preferredTime) {
 }
 
 function findOpenSlot(task) {
-  const deadline = task.deadline ? new Date(task.deadline + "T23:59:59") : addDays(new Date(), 14);
+  const deadline = task.deadline
+    ? new Date(task.deadline + "T23:59:59")
+    : addDays(new Date(), 14);
+
   const [prefStart, prefEnd] = preferredHourRange(task.preferredTime);
+
   const durationMs = task.durationMinutes * 60 * 1000;
 
-  // search day by day, starting today, until the deadline
   let cursorDay = new Date();
   cursorDay.setHours(0, 0, 0, 0);
 
-  while (cursorDay <= deadline) {
-    const daySlots = buildDaySlotBounds(cursorDay, prefStart, prefEnd);
+  const candidates = [];
 
-    for (let slotStart = daySlots.start; slotStart + durationMs <= daySlots.end; slotStart += SLOT_MINUTES * 60 * 1000) {
+  // Look through every possible day before the deadline
+  while (cursorDay <= deadline) {
+    const daySlots = buildDaySlotBounds(
+      cursorDay,
+      prefStart,
+      prefEnd
+    );
+
+    for (
+      let slotStart = daySlots.start;
+      slotStart + durationMs <= daySlots.end;
+      slotStart += SLOT_MINUTES * 60 * 1000
+    ) {
       const candidateStart = new Date(slotStart);
       const candidateEnd = new Date(slotStart + durationMs);
 
+      // Don't schedule after the deadline
       if (candidateEnd > deadline) continue;
-      if (isSlotFree(candidateStart, candidateEnd)) {
-        return candidateStart.toISOString();
-      }
+
+      // Don't schedule on top of another task
+      if (!isSlotFree(candidateStart, candidateEnd)) continue;
+
+      const score = scoreTimeSlot(
+        candidateStart,
+        candidateEnd,
+        task,
+        deadline
+      );
+
+      candidates.push({
+        start: candidateStart,
+        end: candidateEnd,
+        score
+      });
     }
+
     cursorDay = addDays(cursorDay, 1);
   }
 
-  return null; // no open slot found before deadline
+  // No possible slots
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  // Highest score wins
+  candidates.sort((a, b) => b.score - a.score);
+
+  return candidates[0].start.toISOString();
+}
+
+
+function scoreTimeSlot(candidateStart, candidateEnd, task, deadline) {
+  let score = 0;
+
+  // --------------------------------
+  // 1. PREFERRED TIME
+  // --------------------------------
+
+  const hour = candidateStart.getHours();
+
+  if (task.preferredTime === "morning") {
+    if (hour >= 7 && hour < 12) {
+      score += 40;
+    }
+  }
+
+  if (task.preferredTime === "afternoon") {
+    if (hour >= 12 && hour < 17) {
+      score += 40;
+    }
+  }
+
+  if (task.preferredTime === "evening") {
+    if (hour >= 17 && hour < 22) {
+      score += 40;
+    }
+  }
+
+  // --------------------------------
+  // 2. AVOID VERY LATE TIMES
+  // --------------------------------
+
+  if (hour >= 21) {
+    score -= 15;
+  }
+
+  // --------------------------------
+  // 3. DEADLINE PRESSURE
+  // --------------------------------
+
+  const hoursUntilDeadline =
+    (deadline.getTime() - candidateStart.getTime()) /
+    (1000 * 60 * 60);
+
+  // If the deadline is very close,
+  // strongly prefer earlier slots.
+  if (hoursUntilDeadline <= 24) {
+    score += 30;
+  } else if (hoursUntilDeadline <= 48) {
+    score += 20;
+  } else if (hoursUntilDeadline <= 72) {
+    score += 10;
+  }
+
+  // --------------------------------
+  // 4. DON'T ALWAYS PICK THE EARLIEST
+  // --------------------------------
+
+  const daysFromToday =
+    Math.floor(
+      (candidateStart - new Date()) /
+      (1000 * 60 * 60 * 24)
+    );
+
+  // Slight preference for earlier days,
+  // but not enough to override preferred time.
+  score += Math.max(0, 10 - daysFromToday);
+
+  // --------------------------------
+  // 5. AVOID OVERLOADING A DAY
+  // --------------------------------
+
+  const candidateDate = formatDateISO(candidateStart);
+
+  const tasksThatDay = tasks.filter((t) => {
+    if (t.status !== "scheduled" || !t.scheduledStart) {
+      return false;
+    }
+
+    return (
+      formatDateISO(new Date(t.scheduledStart)) ===
+      candidateDate
+    );
+  });
+
+  // Fewer existing tasks = better
+  score -= tasksThatDay.length * 5;
+
+  return score;
 }
 
 function buildDaySlotBounds(day, prefStartHour, prefEndHour) {
