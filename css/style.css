@@ -607,3 +607,19 @@ body.landing {
   color: white;
   border-color: #111;
 }
+
+.add-event-btn {
+  display: block !important;
+  position: relative !important;
+  z-index: 9999 !important;
+  margin-left: auto !important;
+  padding: 12px 18px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background: red !important;
+  color: white !important;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
