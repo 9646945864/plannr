@@ -528,7 +528,7 @@ body.landing {
   padding: 10px 16px;
   border: none;
   border-radius: 8px;
-  background: #14171F;
+  background: var(--accent-red);
   color: white;
   font-family: inherit;
   font-weight: 600;
