@@ -605,4 +605,20 @@ body.landing {
   border-color: #111;
 }
 
+.event-block {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--accent-green);
+  color: #14171F;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.event-block .task-title,
+.event-block .task-time {
+  color: #14171F;
+}
 
