@@ -514,6 +514,31 @@ function handleNextWeek() {
   renderCalendar();
 }
 
+/* ---------- 9.5. TAB NAVIGATION ---------- */
+
+document.querySelectorAll(".tab-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    const targetId = button.dataset.target;
+
+    document.querySelectorAll(".view").forEach((view) => {
+      view.classList.add("is-hidden");
+    });
+
+    document.getElementById(targetId).classList.remove("is-hidden");
+
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.classList.remove("is-active");
+    });
+
+    button.classList.add("is-active");
+
+    if (targetId === "view-calendar") {
+      renderWeekLabel();
+      renderCalendar();
+    }
+  });
+});
+
 /* ---------- 10. INIT ---------- */
 
 document.getElementById("task-form").addEventListener("submit", handleAddTask);
