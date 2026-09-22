@@ -524,18 +524,15 @@ body.landing {
 
 
 .add-event-btn {
-  display: block;
   margin-left: auto;
-  padding: 12px 18px;
+  padding: 10px 16px;
   border: none;
   border-radius: 8px;
-  background: #d62828;
+  background: var(--accent-orange);
   color: white;
   font-family: inherit;
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
 }
 
 .add-event-btn:hover {
