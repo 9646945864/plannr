@@ -529,7 +529,7 @@ body.landing {
   border: none;
   border-radius: 8px;
   background: var(--accent-red);
-  color: white;
+  color: #14171F;
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;
