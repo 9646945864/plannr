@@ -280,12 +280,17 @@ async function parseTaskWithAI(rawText) {
   });
 
   if (!response.ok) {
-  const errorData = await response.json().catch(() => null);
+    const errorData = await response.json().catch(() => null);
 
-  throw new Error(
-    errorData?.error ||
-    `Server responded with ${response.status}`
-  );
+    throw new Error(
+      errorData?.error ||
+      `Server responded with ${response.status}`
+    );
+  }
+
+  const data = await response.json();
+
+  return data;
 }
 
   const data = await response.json();
@@ -472,12 +477,13 @@ async function handleAddTask(event) {
 
     const task = {
       id: "t_" + Date.now(),
-      title: parsed.title || rawText,
-      durationMinutes: parsed.durationMinutes || 60,
-      deadline: parsed.deadline || null,
-      preferredTime: parsed.preferredTime || null,
-      status: "scheduled",
-      scheduledStart: null,
+     title: parsed.title || rawText,
+     durationMinutes: parsed.durationMinutes || 60,
+     deadline: parsed.deadline || null,
+     preferredTime: parsed.preferredTime || null,
+     status: "scheduled",
+     scheduledStart: null,
+     type: "task",
     };
 
     const slot = findOpenSlot(task);
