@@ -623,3 +623,20 @@ body.landing {
   font-size: 14px;
   cursor: pointer;
 }
+
+.add-event-btn {
+  display: block !important;
+  position: fixed !important;
+  top: 100px !important;
+  right: 30px !important;
+  z-index: 99999 !important;
+  padding: 15px 20px !important;
+  background: red !important;
+  color: white !important;
+  border: 3px solid black !important;
+  border-radius: 10px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
