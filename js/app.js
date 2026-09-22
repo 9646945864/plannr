@@ -287,12 +287,6 @@ async function parseTaskWithAI(rawText) {
       `Server responded with ${response.status}`
     );
   }
-
-  const data = await response.json();
-
-  return data;
-}
-
   const data = await response.json();
   return data; // expected: { title, durationMinutes, deadline, preferredTime }
 }
@@ -372,14 +366,12 @@ function placeTasksOnGrid() {
     const heightPx = (task.durationMinutes / 60) * hourHeightPx;
 
     const block = document.createElement("div");
-    block.className =
-      (task.type === "event" ? "event-block" : "task-block") +
-      (task.status === "done" ? " is-done" : "");
+    block.className = "task-block" + (task.status === "done" ? " is-done" : "");
     block.style.top = `${topPx}px`;
     block.style.height = `${Math.max(heightPx, 20)}px`;
     block.innerHTML = `
-      <span class="task-title">${escapeHTML(task.title)}</span>
-      <span class="task-time">${formatTimeShort(start)}</span>
+     <span class="task-title">${escapeHTML(task.title)}</span>
+     <span class="task-time">${formatTimeShort(start)}</span>
     `;
     block.addEventListener("click", () => toggleTaskDone(task.id));
     col.appendChild(block);
@@ -521,31 +513,6 @@ function handleNextWeek() {
   renderWeekLabel();
   renderCalendar();
 }
-
-/* ---------- 9.5. TAB NAVIGATION ---------- */
-
-document.querySelectorAll(".tab-btn").forEach((button) => {
-  button.addEventListener("click", () => {
-    const targetId = button.dataset.target;
-
-    document.querySelectorAll(".view").forEach((view) => {
-      view.classList.add("is-hidden");
-    });
-
-    document.getElementById(targetId).classList.remove("is-hidden");
-
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.classList.remove("is-active");
-    });
-
-    button.classList.add("is-active");
-
-    if (targetId === "view-calendar") {
-      renderWeekLabel();
-      renderCalendar();
-    }
-  });
-});
 
 /* ---------- 10. INIT ---------- */
 
