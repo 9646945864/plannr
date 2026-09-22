@@ -640,3 +640,19 @@ body.landing {
   visibility: visible !important;
   opacity: 1 !important;
 }
+
+#add-event-btn {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: fixed !important;
+  top: 100px !important;
+  left: 100px !important;
+  z-index: 999999 !important;
+  width: 180px !important;
+  height: 60px !important;
+  background: red !important;
+  color: white !important;
+  border: 5px solid yellow !important;
+  font-size: 18px !important;
+}
