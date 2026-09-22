@@ -367,7 +367,9 @@ function placeTasksOnGrid() {
     const heightPx = (task.durationMinutes / 60) * hourHeightPx;
 
     const block = document.createElement("div");
-    block.className = "task-block" + (task.status === "done" ? " is-done" : "");
+    block.className =
+      (task.type === "event" ? "event-block" : "task-block") +
+      (task.status === "done" ? " is-done" : "");
     block.style.top = `${topPx}px`;
     block.style.height = `${Math.max(heightPx, 20)}px`;
     block.innerHTML = `
