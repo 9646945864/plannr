@@ -519,3 +519,87 @@ body.landing {
   .preview-day-label { font-size: 11px; }
   .logo-hero .logo-svg { height: 44px; }
 }
+
+/* ---------- MANUAL EVENTS ---------- */
+
+.add-event-btn {
+  margin-left: auto;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #111;
+  color: white;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-event-btn:hover {
+  opacity: 0.85;
+}
+
+.event-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+}
+
+.event-modal.is-hidden {
+  display: none;
+}
+
+.event-modal-card {
+  width: min(420px, calc(100% - 32px));
+  padding: 28px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.event-modal-card h2 {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.event-modal-card label {
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.event-modal-card input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-family: inherit;
+}
+
+.event-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.event-modal-actions button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: white;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.event-modal-actions button[type="submit"] {
+  background: #111;
+  color: white;
+  border-color: #111;
+}
