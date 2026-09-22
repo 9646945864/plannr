@@ -397,6 +397,56 @@ function toggleTaskDone(taskId) {
   renderCalendar();
 }
 
+function handleAddEvent(event) {
+  event.preventDefault();
+
+  const title = document.getElementById("event-title").value.trim();
+  const date = document.getElementById("event-date").value;
+  const startTime = document.getElementById("event-start").value;
+  const endTime = document.getElementById("event-end").value;
+
+  if (!title || !date || !startTime || !endTime) {
+    return;
+  }
+
+  const start = new Date(`${date}T${startTime}`);
+  const end = new Date(`${date}T${endTime}`);
+
+  if (end <= start) {
+    alert("End time must be after start time.");
+    return;
+  }
+
+  const durationMinutes = Math.round(
+    (end.getTime() - start.getTime()) / (1000 * 60)
+  );
+
+  const newEvent = {
+    id: "e_" + Date.now(),
+    title,
+    durationMinutes,
+    deadline: null,
+    preferredTime: null,
+    status: "scheduled",
+    scheduledStart: start.toISOString(),
+    type: "event"
+  };
+
+  // Make sure the event doesn't overlap another task/event
+  if (!isSlotFree(start, end)) {
+    alert("That time overlaps another task or event.");
+    return;
+  }
+
+  tasks.push(newEvent);
+  saveTasks();
+
+  document.getElementById("event-form").reset();
+  document.getElementById("event-modal").classList.add("is-hidden");
+
+  renderCalendar();
+}
+
 /* ---------- 8. ADDING A TASK (the main flow) ---------- */
 
 function setStatus(message, isError = false) {
@@ -467,8 +517,27 @@ function handleNextWeek() {
 /* ---------- 10. INIT ---------- */
 
 document.getElementById("task-form").addEventListener("submit", handleAddTask);
+
 document.getElementById("prev-week").addEventListener("click", handlePrevWeek);
+
 document.getElementById("next-week").addEventListener("click", handleNextWeek);
+
+document.getElementById("add-event-btn").addEventListener("click", () => {
+  document.getElementById("event-modal").classList.remove("is-hidden");
+
+  // Default to today
+  document.getElementById("event-date").value = formatDateISO(new Date());
+
+  // Default time
+  document.getElementById("event-start").value = "17:00";
+  document.getElementById("event-end").value = "18:00";
+});
+
+document.getElementById("cancel-event-btn").addEventListener("click", () => {
+  document.getElementById("event-modal").classList.add("is-hidden");
+});
+
+document.getElementById("event-form").addEventListener("submit", handleAddEvent);
 
 renderWeekLabel();
 renderCalendar();
