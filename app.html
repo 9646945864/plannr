@@ -4,103 +4,161 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Plannr</title>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Shrikhand&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
   <header class="topbar">
+
     <div class="logo" aria-label="Plannr logo">
       <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
         <text x="140" y="44" text-anchor="middle" class="logo-text">PLANNR</text>
       </svg>
     </div>
+
     <p class="tagline">Tell it what you need to do. It finds the time.</p>
 
-    <nav class="tab-nav" aria-label="Main">
-      <button class="tab-btn is-active" id="tab-btn-home" data-target="view-home">Home</button>
-      <button class="tab-btn" id="tab-btn-calendar" data-target="view-calendar">Calendar</button>
-    </nav>
   </header>
 
-  <main>
-    <section id="view-home" class="view">
-      <section class="input-section" aria-label="Add a task">
-        <form id="task-form" class="task-form">
-          <input
-            type="text"
-            id="task-input"
-            placeholder="e.g. Study for chem test Thursday, need 3 hours, prefer evenings"
-            autocomplete="off"
-            required
-          >
-          <button type="submit" id="task-submit">Add to week</button>
-        </form>
-        <p id="status-line" class="status-line" aria-live="polite"></p>
-      </section>
 
-      <section class="upcoming-section" aria-label="Upcoming tasks">
-        <h2 class="section-heading">Coming up</h2>
-        <ul id="upcoming-list" class="upcoming-list"></ul>
-      </section>
+  <main>
+
+    <!-- AI COMMAND -->
+
+    <section class="input-section" aria-label="Add a task">
+
+      <form id="task-form" class="task-form">
+
+        <input
+          type="text"
+          id="task-input"
+          placeholder="e.g. Study for chem test Thursday, need 3 hours, prefer evenings"
+          autocomplete="off"
+          required
+        >
+
+        <button type="submit" id="task-submit">
+          Add to week
+        </button>
+
+      </form>
+
+      <p id="status-line" class="status-line" aria-live="polite"></p>
+
     </section>
 
-   <section id="view-calendar" class="view">
-  <div class="week-nav">
-    <button id="prev-week" class="week-nav-btn" aria-label="Previous week">&larr;</button>
-    <h2 id="week-label" class="week-label"></h2>
-    <button id="next-week" class="week-nav-btn" aria-label="Next week">&rarr;</button>
-    <button id="add-event-btn" class="add-event-btn">+ Add Event</button>
-  </div>
 
-  <div id="calendar-grid" class="calendar-grid"></div>
-</section>
+    <!-- CALENDAR -->
 
-<!-- Add Event Modal -->
-<div id="event-modal" class="event-modal is-hidden">
-  <div class="event-modal-card">
-    <h2>Add Event</h2>
+    <section id="view-calendar" class="view">
 
-    <form id="event-form">
-      <label for="event-title">Event name</label>
-      <input
-        type="text"
-        id="event-title"
-        placeholder="e.g. Soccer practice"
-        required
-      >
+      <div class="week-nav">
 
-      <label for="event-date">Date</label>
-      <input
-        type="date"
-        id="event-date"
-        required
-      >
+        <button
+          id="prev-week"
+          class="week-nav-btn"
+          aria-label="Previous week"
+        >
+          &larr;
+        </button>
 
-      <label for="event-start">Start time</label>
-      <input
-        type="time"
-        id="event-start"
-        required
-      >
+        <h2 id="week-label" class="week-label"></h2>
 
-      <label for="event-end">End time</label>
-      <input
-        type="time"
-        id="event-end"
-        required
-      >
+        <button
+          id="next-week"
+          class="week-nav-btn"
+          aria-label="Next week"
+        >
+          &rarr;
+        </button>
 
-      <div class="event-modal-actions">
-        <button type="button" id="cancel-event-btn">Cancel</button>
-        <button type="submit">Save Event</button>
+        <button id="add-event-btn" class="add-event-btn">
+          + Add Event
+        </button>
+
       </div>
-    </form>
-  </div>
-</div>
+
+
+      <div id="calendar-grid" class="calendar-grid"></div>
+
+    </section>
+
+
+    <!-- ADD EVENT MODAL -->
+
+    <div id="event-modal" class="event-modal is-hidden">
+
+      <div class="event-modal-card">
+
+        <h2>Add Event</h2>
+
+        <form id="event-form">
+
+          <label for="event-title">Event name</label>
+
+          <input
+            type="text"
+            id="event-title"
+            placeholder="e.g. Soccer practice"
+            required
+          >
+
+
+          <label for="event-date">Date</label>
+
+          <input
+            type="date"
+            id="event-date"
+            required
+          >
+
+
+          <label for="event-start">Start time</label>
+
+          <input
+            type="time"
+            id="event-start"
+            required
+          >
+
+
+          <label for="event-end">End time</label>
+
+          <input
+            type="time"
+            id="event-end"
+            required
+          >
+
+
+          <div class="event-modal-actions">
+
+            <button type="button" id="cancel-event-btn">
+              Cancel
+            </button>
+
+            <button type="submit">
+              Save Event
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+  </main>
+
 
   <script src="js/app.js"></script>
+
 </body>
 </html>
