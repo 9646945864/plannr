@@ -155,8 +155,8 @@ ${JSON.stringify(text)}
 
       console.error("Gemini error:", errorText);
 
-      return res.status(500).json({
-        error: "Gemini request failed"
+      return res.status(response.status).json({
+       error: `Gemini request failed: ${errorText}`
       });
     }
 
