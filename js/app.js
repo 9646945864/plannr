@@ -155,7 +155,7 @@ function findOpenSlot(task) {
   // Highest score wins
   candidates.sort((a, b) => b.score - a.score);
 
-  return candidates[0].start.toISOString();
+  return formatLocalDateTime(candidates[0].start);
 }
 
 
@@ -247,6 +247,16 @@ function scoreTimeSlot(candidateStart, candidateEnd, task, deadline) {
   score -= tasksThatDay.length * 5;
 
   return score;
+}
+
+function formatLocalDateTime(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const h = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+
+  return `${y}-${m}-${d}T${h}:${min}:00`;
 }
 
 function buildDaySlotBounds(day, prefStartHour, prefEndHour) {
@@ -491,8 +501,13 @@ async function handleAddTask(event) {
     tasks.push(task);
     saveTasks();
 
+    // Show the week containing the newly scheduled task
+    currentWeekStart = getStartOfWeek(new Date(slot));
+
     input.value = "";
     setStatus(`Scheduled for ${new Date(slot).toLocaleString(undefined, { weekday: "long", hour: "numeric", minute: "2-digit" })}.`);
+
+    renderWeekLabel();
     renderCalendar();
   } catch (err) {
     console.error(err);
