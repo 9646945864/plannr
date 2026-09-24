@@ -327,9 +327,21 @@ function renderCalendar() {
     const dayDate = addDays(currentWeekStart, i);
     const header = document.createElement("div");
     header.className = "day-header";
-    if (formatDateISO(dayDate) === todayISO) header.classList.add("is-today");
+
+    const isToday = formatDateISO(dayDate) === todayISO;
+
+    if (isToday) {
+      header.classList.add("is-today");
+    }
+
     header.style.gridColumn = i + 2;
-    header.innerHTML = `<span class="day-name">${dayDate.toLocaleDateString(undefined, { weekday: "short" })} ${dayDate.getDate()}</span>`;
+
+    header.innerHTML = `
+      <span class="day-name">
+        ${dayDate.toLocaleDateString(undefined, { weekday: "short" })} ${dayDate.getDate()}
+      </span>
+      ${isToday ? '<span class="today-label">TODAY</span>' : ""}
+    `;
     grid.appendChild(header);
   }
 
