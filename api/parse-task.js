@@ -1,23 +1,15 @@
-/* ============================================================
-   /api/parse-task
-   Parses natural-language calendar commands using Gemini.
-   Supports:
-   - Creating tasks
-   - Rescheduling tasks
-   - Deleting tasks
-   - Explicit dates and times
-   ============================================================ */
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed"
+    });
   }
 
   const { text } = req.body || {};
 
   if (!text || typeof text !== "string") {
     return res.status(400).json({
-      error: "Missing 'text' in request body",
+      error: "Missing task text"
     });
   }
 
@@ -25,164 +17,159 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: "Server is missing GEMINI_API_KEY",
+      error: "GEMINI_API_KEY is missing"
     });
   }
 
-  // Use the server's local date as the reference date.
   const today = new Date().toISOString().slice(0, 10);
 
   const prompt = `
-You are the AI command parser for a calendar app called Plannr.
+You are Plannr, an AI calendar command parser.
 
 Today's date is ${today}.
 
-The user may want to CREATE, RESCHEDULE, or DELETE a calendar task.
+Read the user's command and return ONLY JSON.
 
-Return ONLY valid JSON with exactly these fields:
+Return exactly:
 
 {
   "action": "create",
-  "title": "short task name",
+  "title": "task name",
   "durationMinutes": 60,
-  "date": "YYYY-MM-DD",
-  "time": "HH:MM",
-  "deadline": "YYYY-MM-DD",
-  "preferredTime": "morning",
+  "date": null,
+  "time": null,
+  "deadline": null,
+  "preferredTime": null,
   "targetTitle": null
 }
 
-ACTION RULES:
+ACTION:
 
-1. CREATE
-Use action "create" when the user wants to add a new task.
+Use "create" when the user wants to add something.
 
-Examples:
-"Study for chemistry tomorrow for 2 hours"
-"Do my history homework Thursday evening"
-"Study for math tomorrow at 4 PM"
+Use "reschedule" when the user wants to move an existing calendar item.
 
-2. RESCHEDULE
-Use action "reschedule" when the user wants to move an existing task.
+Use "delete" when the user wants to remove an existing calendar item.
 
-Examples:
-"Move my chemistry study session to Friday at 6 PM"
-"Reschedule history homework to tomorrow"
-"Move math to Monday at 4"
+CREATE example:
+"Study chemistry tomorrow for 2 hours"
 
-For reschedule:
-- targetTitle should identify the EXISTING task.
-- date should be the new date if provided.
-- time should be the new time if provided.
-- If only a new date is provided, leave time as null.
-- If only a new time is provided, leave date as null.
-- Do NOT create a new task.
+RESCHEDULE example:
+"Move chemistry to Friday at 6 PM"
 
-3. DELETE
-Use action "delete" when the user wants to remove an existing task.
+DELETE example:
+"Delete chemistry"
+
+DATE:
+
+Resolve today, tomorrow, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, and Sunday using today's date.
+
+date must be YYYY-MM-DD or null.
+
+TIME:
+
+If the user gives an exact time, convert it to 24-hour time.
 
 Examples:
-"Delete my chemistry study session"
-"Remove my math homework"
-"Cancel the history task"
+4 PM = 16:00
+6 PM = 18:00
+9 AM = 09:00
+6:30 PM = 18:30
 
-For delete:
-- targetTitle should identify the existing task.
-- date and time should be null.
+time must be HH:MM or null.
 
-DATE RULES:
+DURATION:
 
-- Resolve today, tomorrow, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, and Sunday using today's date.
-- date must be YYYY-MM-DD or null.
-- Never choose a date before today unless the user explicitly asks for a past date.
-- If the user says "tomorrow", use tomorrow's actual date.
+"2 hours" = 120
+"90 minutes" = 90
 
-TIME RULES:
+If creating a task and no duration is given, use 60.
 
-- If the user explicitly gives a time, preserve it.
-- "4 PM" = "16:00"
-- "6:30 PM" = "18:30"
-- "9 AM" = "09:00"
-- time must be HH:MM using 24-hour time or null.
-- Do NOT turn an explicit time into just morning/afternoon/evening.
-
-DURATION RULES:
-
-- durationMinutes must be a positive number.
-- "2 hours" = 120.
-- "90 minutes" = 90.
-- If no duration is given, use 60.
-- For RESCHEDULE and DELETE, use null if duration is not relevant.
+For reschedule/delete, durationMinutes can be null.
 
 PREFERRED TIME:
 
-- Use "morning", "afternoon", "evening", or null.
-- If an exact time is given, preferredTime may be null.
+Use only:
+"morning"
+"afternoon"
+"evening"
+or null.
 
-TITLE RULES:
+If an exact time is provided, preferredTime can be null.
 
-- Make titles short and clear.
-- For reschedule/delete, targetTitle should contain the main identifying words of the existing task.
-- Do not invent unnecessary words.
+DEADLINE:
+
+Use YYYY-MM-DD or null.
+
+TARGET TITLE:
+
+For reschedule and delete, targetTitle should identify the existing calendar item.
+
+For create, targetTitle must be null.
 
 IMPORTANT:
-- Return ONLY JSON.
-- No markdown.
-- No explanation.
-- Do not include any fields other than the seven fields above.
+
+Never invent a past date unless the user explicitly asks for one.
+
+Return ONLY JSON.
+No markdown.
+No explanation.
 
 User command:
 ${JSON.stringify(text)}
 `;
 
   try {
-    const geminiResponse = await fetch(
+    const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" +
         encodeURIComponent(apiKey),
       {
         method: "POST",
+
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
+
         body: JSON.stringify({
           contents: [
             {
               parts: [
                 {
-                  text: prompt,
-                },
-              ],
-            },
+                  text: prompt
+                }
+              ]
+            }
           ],
+
           generationConfig: {
             temperature: 0,
-            responseMimeType: "application/json",
             maxOutputTokens: 200,
-          },
-        }),
+            responseMimeType: "application/json"
+          }
+        })
       }
     );
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
+    if (!response.ok) {
+      const errorText = await response.text();
 
-      console.error("GEMINI ERROR:", errorText);
+      console.error("Gemini error:", errorText);
 
-      return res.status(geminiResponse.status).json({
-        error: "AI service error",
+      return res.status(500).json({
+        error: "Gemini request failed"
       });
     }
 
-    const data = await geminiResponse.json();
+    const data = await response.json();
 
     const rawText =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
-      console.error("Gemini returned no text:", data);
+      console.error("No Gemini response:", data);
 
-      return res.status(502).json({
-        error: "Gemini returned an empty response",
+      return res.status(500).json({
+        error: "Gemini returned no response"
       });
     }
 
@@ -190,17 +177,17 @@ ${JSON.stringify(text)}
 
     try {
       parsed = JSON.parse(rawText);
-    } catch (parseErr) {
-      console.error("Invalid JSON from Gemini:", rawText);
+    } catch (err) {
+      console.error("Invalid Gemini JSON:", rawText);
 
-      return res.status(502).json({
-        error: "Could not parse AI response",
+      return res.status(500).json({
+        error: "AI returned invalid JSON"
       });
     }
 
-    // --------------------------------------------------------
-    // Validate action
-    // --------------------------------------------------------
+    /*
+     * Make sure every expected property exists.
+     */
 
     if (
       parsed.action !== "create" &&
@@ -210,42 +197,16 @@ ${JSON.stringify(text)}
       parsed.action = "create";
     }
 
-    // --------------------------------------------------------
-    // Validate title
-    // --------------------------------------------------------
-
     if (typeof parsed.title !== "string") {
       parsed.title = "";
     }
 
-    // --------------------------------------------------------
-    // Validate targetTitle
-    // --------------------------------------------------------
-
     if (
-      parsed.targetTitle !== null &&
-      typeof parsed.targetTitle !== "string"
-    ) {
-      parsed.targetTitle = null;
-    }
-
-    // --------------------------------------------------------
-    // Validate duration
-    // --------------------------------------------------------
-
-    if (
-      parsed.durationMinutes !== null &&
-      (
-        typeof parsed.durationMinutes !== "number" ||
-        parsed.durationMinutes <= 0
-      )
+      typeof parsed.durationMinutes !== "number" ||
+      parsed.durationMinutes <= 0
     ) {
       parsed.durationMinutes = 60;
     }
-
-    // --------------------------------------------------------
-    // Validate date
-    // --------------------------------------------------------
 
     if (
       parsed.date !== null &&
@@ -254,10 +215,6 @@ ${JSON.stringify(text)}
       parsed.date = null;
     }
 
-    // --------------------------------------------------------
-    // Validate time
-    // --------------------------------------------------------
-
     if (
       parsed.time !== null &&
       !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(parsed.time)
@@ -265,20 +222,12 @@ ${JSON.stringify(text)}
       parsed.time = null;
     }
 
-    // --------------------------------------------------------
-    // Validate deadline
-    // --------------------------------------------------------
-
     if (
       parsed.deadline !== null &&
       !/^\d{4}-\d{2}-\d{2}$/.test(parsed.deadline)
     ) {
       parsed.deadline = null;
     }
-
-    // --------------------------------------------------------
-    // Validate preferred time
-    // --------------------------------------------------------
 
     if (
       parsed.preferredTime !== "morning" &&
@@ -289,23 +238,16 @@ ${JSON.stringify(text)}
       parsed.preferredTime = null;
     }
 
-    // --------------------------------------------------------
-    // Clean up action-specific fields
-    // --------------------------------------------------------
-
-    if (parsed.action === "delete") {
-      parsed.date = null;
-      parsed.time = null;
-      parsed.durationMinutes = null;
-      parsed.deadline = null;
-      parsed.preferredTime = null;
+    if (
+      parsed.targetTitle !== null &&
+      typeof parsed.targetTitle !== "string"
+    ) {
+      parsed.targetTitle = null;
     }
 
-    if (parsed.action === "reschedule") {
-      parsed.durationMinutes = null;
-      parsed.deadline = null;
-      parsed.preferredTime = null;
-    }
+    /*
+     * Return the exact structure app.js expects.
+     */
 
     return res.status(200).json({
       action: parsed.action,
@@ -315,13 +257,14 @@ ${JSON.stringify(text)}
       time: parsed.time,
       deadline: parsed.deadline,
       preferredTime: parsed.preferredTime,
-      targetTitle: parsed.targetTitle,
+      targetTitle: parsed.targetTitle
     });
+
   } catch (err) {
     console.error("Server error:", err);
 
     return res.status(500).json({
-      error: "Unexpected server error",
+      error: "Unexpected server error"
     });
   }
 }
