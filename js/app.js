@@ -467,6 +467,8 @@ async function handleAddTask(event) {
   try {
     const parsed = await parseTaskWithAI(rawText);
 
+    console.log("AI PARSED:", parsed);
+
     const task = {
       id: "t_" + Date.now(),
      title: parsed.title || rawText,
