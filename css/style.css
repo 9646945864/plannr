@@ -534,6 +534,26 @@ body.landing {
   line-height: 1.4;
 }
 
+.signup-btn {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent-red);
+  color: #14171F;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.signup-btn:hover {
+  opacity: 0.9;
+}
+
+.signup-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 640px) {
   .preview-day-label { font-size: 11px; }
   .logo-hero .logo-svg { height: 44px; }
