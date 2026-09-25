@@ -13,6 +13,8 @@ const supabaseClient = window.supabase.createClient(
 
 function setupSignIn() {
   const form = document.getElementById("signin-form");
+  const signupButton = document.getElementById("signup-btn");
+
   if (!form) return;
 
   form.addEventListener("submit", async (event) => {
@@ -52,6 +54,47 @@ function setupSignIn() {
       button.textContent = "Sign in";
     }
   });
+
+  if (signupButton) {
+    signupButton.addEventListener("click", async () => {
+      const email = document.getElementById("signin-email").value.trim();
+      const password = document.getElementById("signin-password").value;
+
+      if (!email || !password) {
+        alert("Enter an email and password first.");
+        return;
+      }
+
+      signupButton.disabled = true;
+      signupButton.textContent = "Creating account...";
+
+      try {
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password
+        });
+
+        if (error) {
+          alert(error.message);
+          return;
+        }
+
+        if (data.session) {
+          window.location.href = "app.html";
+        } else {
+          alert("Account created! Check your email to confirm your account, then sign in.");
+        }
+
+      } catch (error) {
+        console.error(error);
+        alert("Something went wrong creating your account.");
+
+      } finally {
+        signupButton.disabled = false;
+        signupButton.textContent = "Create account";
+      }
+    });
+  }
 }
 
 setupSignIn();
