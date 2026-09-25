@@ -107,7 +107,10 @@ ${JSON.stringify(text)}
             }
           ],
           generationConfig: {
-            responseMimeType: "application/json"
+            responseMimeType: "application/json",
+            thinkingConfig: {
+              thinkingLevel: "minimal"
+            }
           }
         })
       }
