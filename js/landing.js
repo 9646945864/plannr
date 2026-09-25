@@ -1,20 +1,56 @@
 /* ============================================================
    PLANNR — landing.js
-   Handles the marketing/landing page only (index.html): the
-   demo sign-in redirect into app.html. The calendar preview
-   graphic is a static SVG in index.html, and the "See how it
-   works" button is a plain anchor link (#signin-section) —
-   neither needs JavaScript.
+   Real Supabase authentication
    ============================================================ */
+
+const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
 function setupSignIn() {
   const form = document.getElementById("signin-form");
   if (!form) return;
-  form.addEventListener("submit", (event) => {
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    // Demo-only: no real auth yet. This is where a real backend
-    // check would go before redirecting.
-    window.location.href = "app.html";
+
+    const email = document.getElementById("signin-email").value.trim();
+    const password = document.getElementById("signin-password").value;
+
+    if (!email || !password) {
+      alert("Please enter your email and password.");
+      return;
+    }
+
+    const button = form.querySelector(".signin-btn");
+    button.disabled = true;
+    button.textContent = "Signing in...";
+
+    try {
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      window.location.href = "app.html";
+
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Please try again.");
+
+    } finally {
+      button.disabled = false;
+      button.textContent = "Sign in";
+    }
   });
 }
 
