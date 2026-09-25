@@ -15,6 +15,14 @@
 
 /* ---------- 1. CONFIG ---------- */
 
+const SUPABASE_URL = "https://tlimbaewebfyibhxdcbk.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Wkqp70DOPk_vDZNChqLi_g_70dmrgay";
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
 const DAY_START_HOUR = 7;
 const DAY_END_HOUR = 22;
 const SLOT_MINUTES = 30;
