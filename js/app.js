@@ -1977,6 +1977,21 @@ document
 
 /* ---------- INITIAL RENDER ---------- */
 
-renderWeekLabel();
+async function initializeApp() {
+  const {
+    data: { user },
+    error
+  } = await supabaseClient.auth.getUser();
 
-renderCalendar();
+  if (error || !user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  console.log("Signed in as:", user.email);
+
+  renderWeekLabel();
+  renderCalendar();
+}
+
+initializeApp();
