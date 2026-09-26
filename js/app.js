@@ -1105,8 +1105,7 @@ function handleAddEvent(event) {
   const newEvent = {
 
     id:
-      "e_" +
-      Date.now(),
+      crypto.randomUUID(),
 
     title,
 
