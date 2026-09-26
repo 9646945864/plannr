@@ -353,11 +353,24 @@ function scoreTimeSlot(
   task,
   deadline
 ) {
-
   let score = 0;
 
-  const hour =
-    candidateStart.getHours();
+  const hour = candidateStart.getHours();
+
+  /*
+     Strongly prefer earlier dates and times.
+     Every hour into the future slightly lowers
+     the score, so today/tomorrow wins naturally.
+  */
+
+  const hoursFromNow =
+    (
+      candidateStart.getTime() -
+      Date.now()
+    ) /
+    (1000 * 60 * 60);
+
+  score -= hoursFromNow * 2;
 
 
   /*
@@ -372,7 +385,6 @@ function scoreTimeSlot(
     score += 40;
   }
 
-
   if (
     task.preferredTime === "afternoon" &&
     hour >= 12 &&
@@ -380,7 +392,6 @@ function scoreTimeSlot(
   ) {
     score += 40;
   }
-
 
   if (
     task.preferredTime === "evening" &&
@@ -411,7 +422,6 @@ function scoreTimeSlot(
     ) /
     (1000 * 60 * 60);
 
-
   if (hoursUntilDeadline <= 24) {
     score += 30;
   } else if (hoursUntilDeadline <= 48) {
@@ -422,38 +432,12 @@ function scoreTimeSlot(
 
 
   /*
-     Prefer earlier future days.
-
-     IMPORTANT:
-     This only considers FUTURE candidates
-     because findOpenSlot() already rejected
-     past times.
-  */
-
-  const daysFromToday =
-    Math.floor(
-      (
-        candidateStart -
-        new Date()
-      ) /
-      (1000 * 60 * 60 * 24)
-    );
-
-
-  score += Math.max(
-    0,
-    10 - daysFromToday
-  );
-
-
-  /*
      Avoid putting too many tasks
      on the same day.
   */
 
   const candidateDate =
     formatDateISO(candidateStart);
-
 
   const tasksThatDay =
     tasks.filter((t) => {
@@ -472,14 +456,10 @@ function scoreTimeSlot(
       );
     });
 
-
-  score -=
-    tasksThatDay.length * 5;
-
+  score -= tasksThatDay.length * 5;
 
   return score;
 }
-
 
 /* ---------- DAY SLOT BOUNDS ---------- */
 
