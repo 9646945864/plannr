@@ -36,21 +36,22 @@ body {
 
 .topbar {
   margin-bottom: 32px;
-  padding-left: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  padding: 0;
+  display: block;
 }
 
 .logo {
-  margin-bottom: 4px;
-  padding-left: 0;
+  margin: 0 0 4px 0;
+  padding: 0;
+  width: 100%;
 }
 
 .logo-svg {
   height: 40px;
-  width: auto;
+  width: 280px;
   display: block;
+  margin: 0;
+  padding: 0;
 }
 
 .logo-text {
@@ -668,7 +669,10 @@ body.landing {
   font-weight: 600;
 }
 
-.event-modal-card input {
+.event-modal-card input,
+.event-modal-card input[type="text"],
+.event-modal-card input[type="date"],
+.event-modal-card input[type="time"] {
   width: 100%;
   box-sizing: border-box;
   padding: 11px 12px;
@@ -676,12 +680,16 @@ body.landing {
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.95rem;
-  color: #111111;
-  background: #ffffff;
+
+  color: #000000 !important;
+  background-color: #ffffff !important;
+
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .event-modal-card input::placeholder {
-  color: #666666;
+  color: #666666 !important;
+  -webkit-text-fill-color: #666666 !important;
 }
 
 .event-modal-card input:focus {
