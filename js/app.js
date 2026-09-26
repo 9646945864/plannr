@@ -77,17 +77,55 @@ function loadTasks() {
 }
 
 
-function saveTasks() {
+async function saveTasks() {
   try {
+    // Keep the local backup
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify(tasks)
     );
+
+    // Get the signed-in user
+    const {
+      data: { user },
+      error: userError
+    } = await supabaseClient.auth.getUser();
+
+    if (userError || !user) {
+      console.error("No signed-in user:", userError);
+      return;
+    }
+
+    // Save the current tasks to Supabase
+    const rows = tasks.map((task) => ({
+      id: task.id,
+      user_id: user.id,
+      title: task.title,
+      duration_minutes: task.durationMinutes || 60,
+      scheduled_start: task.scheduledStart || null,
+      deadline: task.deadline || null,
+      preferred_time: task.preferredTime || null,
+      status: task.status || "scheduled"
+    }));
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const { error } = await supabaseClient
+      .from("tasks")
+      .upsert(rows);
+
+    if (error) {
+      console.error("Could not save tasks to Supabase:", error);
+    } else {
+      console.log("Tasks saved to Supabase.");
+    }
+
   } catch (err) {
     console.error("Could not save tasks:", err);
   }
 }
-
 
 /* ---------- 4. DATE HELPERS ---------- */
 
