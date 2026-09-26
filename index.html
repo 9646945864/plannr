@@ -1,124 +1,368 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Plannr</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Shrikhand&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Plannr</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Shrikhand&display=swap"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body class="landing">
 
-  <!-- SECTION 1: Hero — logo, description, calendar preview -->
-  <section class="hero-section">
-    <div class="logo logo-hero" aria-label="Plannr logo">
-      <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
-        <text x="140" y="44" text-anchor="middle" class="logo-text">PLANNR</text>
-      </svg>
-    </div>
+  <!-- =========================
+       PLANNR HOMEPAGE PREVIEW
+       ========================= -->
 
-    <p class="hero-description">
-      Plannr is an AI-assisted calendar built for planning, scheduling, and organizing. Tell it
-      what you need to do in plain English and Plannr reads it, finds an
-      open slot before your deadline, and puts it on your calendar for you.
-    </p>
+  <main class="landing-app">
 
-    <div class="preview-calendar" aria-label="Example of a scheduled week in Plannr">
-      <svg viewBox="0 0 700 300" class="preview-svg" role="img" aria-hidden="true">
-        <!-- day columns -->
-        <g class="preview-days">
-          <!-- Sun -->
-          <text x="45" y="18" class="preview-day-label">Sun</text>
-          <!-- Mon -->
-          <text x="145" y="18" class="preview-day-label">Mon</text>
-          <rect x="105" y="60" width="80" height="34" rx="4" class="preview-task-bg"></rect>
-          <rect x="105" y="60" width="4" height="34" class="preview-task-accent"></rect>
-          <text x="113" y="80" class="preview-task-label">Chem lecture</text>
-          <rect x="105" y="150" width="80" height="46" rx="4" class="preview-task-bg"></rect>
-          <rect x="105" y="150" width="4" height="46" class="preview-task-accent"></rect>
-          <text x="113" y="171" class="preview-task-label">Study for</text>
-          <text x="113" y="184" class="preview-task-label">test</text>
-          <!-- Tue -->
-          <text x="245" y="18" class="preview-day-label">Tue</text>
-          <rect x="205" y="110" width="80" height="26" rx="4" class="preview-task-bg"></rect>
-          <rect x="205" y="110" width="4" height="26" class="preview-task-accent"></rect>
-          <text x="213" y="127" class="preview-task-label">Club meeting</text>
-          <!-- Wed -->
-          <text x="345" y="18" class="preview-day-label">Wed</text>
-          <rect x="305" y="70" width="80" height="46" rx="4" class="preview-task-bg"></rect>
-          <rect x="305" y="70" width="4" height="46" class="preview-task-accent"></rect>
-          <text x="313" y="91" class="preview-task-label">Essay</text>
-          <text x="313" y="104" class="preview-task-label">draft</text>
-          <!-- Thu -->
-          <text x="445" y="18" class="preview-day-label">Thu</text>
-          <rect x="405" y="130" width="80" height="26" rx="4" class="preview-task-bg"></rect>
-          <rect x="405" y="130" width="4" height="26" class="preview-task-accent"></rect>
-          <text x="413" y="147" class="preview-task-label">Practice SATs</text>
-          <!-- Fri -->
-          <text x="545" y="18" class="preview-day-label">Fri</text>
-          <rect x="505" y="180" width="80" height="34" rx="4" class="preview-task-bg"></rect>
-          <rect x="505" y="180" width="4" height="34" class="preview-task-accent"></rect>
-          <text x="513" y="200" class="preview-task-label">Volunteer</text>
-          <!-- Sat -->
-          <text x="645" y="18" class="preview-day-label">Sat</text>
-        </g>
-        <!-- hour gridlines -->
-        <g class="preview-gridlines">
-          <line x1="0" y1="36" x2="700" y2="36"></line>
-          <line x1="0" y1="72" x2="700" y2="72"></line>
-          <line x1="0" y1="108" x2="700" y2="108"></line>
-          <line x1="0" y1="144" x2="700" y2="144"></line>
-          <line x1="0" y1="180" x2="700" y2="180"></line>
-          <line x1="0" y1="216" x2="700" y2="216"></line>
-          <line x1="0" y1="252" x2="700" y2="252"></line>
-        </g>
-        <!-- column separators -->
-        <g class="preview-columns">
-          <line x1="100" y1="30" x2="100" y2="270"></line>
-          <line x1="200" y1="30" x2="200" y2="270"></line>
-          <line x1="300" y1="30" x2="300" y2="270"></line>
-          <line x1="400" y1="30" x2="400" y2="270"></line>
-          <line x1="500" y1="30" x2="500" y2="270"></line>
-          <line x1="600" y1="30" x2="600" y2="270"></line>
-        </g>
-      </svg>
-    </div>
+    <!-- HEADER -->
 
-    <a href="#signin-section" class="scroll-cue" id="scroll-cue">
-      <span>See how it works</span>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M3 6L8 11L13 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </a>
-  </section>
+    <header class="landing-topbar">
 
-  <!-- SECTION 2: Sign in -->
-  <section class="signin-section" id="signin-section">
-    <div class="logo logo-small" aria-label="Plannr logo">
-      <svg viewBox="0 0 280 60" class="logo-svg" role="img" aria-hidden="true">
-        <text x="140" y="44" text-anchor="middle" class="logo-text">PLANNR</text>
-      </svg>
-    </div>
-    <form class="signin-form" id="signin-form">
-      <label class="signin-label" for="signin-email">Email</label>
-      <input type="email" id="signin-email" class="signin-input" placeholder="you@school.edu" autocomplete="email">
-
-      <label class="signin-label" for="signin-password">Password</label>
-      <input type="password" id="signin-password" class="signin-input" placeholder="••••••••" autocomplete="current-password">
-
-      <div class="signin-actions">
-        <button type="submit" class="signin-btn">Sign in</button>
-        <button type="button" id="signup-btn" class="signup-btn">Create account</button>
+      <div class="landing-logo">
+        <svg
+          viewBox="0 0 160 60"
+          class="landing-logo-svg"
+          role="img"
+          aria-label="Plannr"
+        >
+          <text
+            x="0"
+            y="44"
+            class="landing-logo-text"
+          >
+            PLANNR
+          </text>
+        </svg>
       </div>
-      <p class="signin-note">
-        Use your email and password to sign in or create your Plannr account.
+
+      <p class="landing-tagline">
+        Tell it what you need to do. It finds the time.
       </p>
-    </form>
-  </section>
+
+    </header>
+
+
+    <!-- AI COMMAND -->
+
+    <section class="landing-command">
+
+      <form id="landing-task-form" class="landing-task-form">
+
+        <input
+          type="text"
+          id="landing-task-input"
+          placeholder="e.g. Study for chem test Thursday, need 3 hours, prefer evenings"
+          autocomplete="off"
+        >
+
+        <button
+          type="button"
+          class="landing-task-button"
+        >
+          Add to week
+        </button>
+
+      </form>
+
+    </section>
+
+
+    <!-- WEEK NAVIGATION -->
+
+    <section class="landing-calendar-section">
+
+      <div class="landing-week-nav">
+
+        <button
+          class="landing-week-arrow"
+          type="button"
+          aria-label="Previous week"
+        >
+          &larr;
+        </button>
+
+        <h2>Sep 20 – Sep 26</h2>
+
+        <button
+          class="landing-week-arrow"
+          type="button"
+          aria-label="Next week"
+        >
+          &rarr;
+        </button>
+
+        <button
+          class="landing-add-event"
+          type="button"
+        >
+          + Add Event
+        </button>
+
+      </div>
+
+
+      <!-- STATIC CALENDAR PREVIEW -->
+
+      <div class="landing-calendar">
+
+        <!-- HEADER ROW -->
+
+        <div class="landing-calendar-header">
+
+          <div class="landing-time-header"></div>
+
+          <div>Sun 20</div>
+          <div>Mon 21</div>
+          <div>Tue 22</div>
+          <div>Wed 23</div>
+          <div>Thu 24</div>
+
+          <div class="landing-today">
+            Fri 25
+            <span>TODAY</span>
+          </div>
+
+          <div>Sat 26</div>
+
+        </div>
+
+
+        <!-- CALENDAR BODY -->
+
+        <div class="landing-calendar-body">
+
+          <!-- TIME COLUMN -->
+
+          <div class="landing-times">
+
+            <div>7am</div>
+            <div>8am</div>
+            <div>9am</div>
+            <div>10am</div>
+
+          </div>
+
+
+          <!-- SUN -->
+
+          <div class="landing-day">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+            <div class="landing-event landing-event-purple">
+              Work call
+              <span>10:00 AM</span>
+            </div>
+
+          </div>
+
+
+          <!-- MON -->
+
+          <div class="landing-day">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+          </div>
+
+
+          <!-- TUE -->
+
+          <div class="landing-day">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+            <div class="landing-event landing-event-red">
+              Project deadline
+              <span>7:00 AM</span>
+            </div>
+
+          </div>
+
+
+          <!-- WED -->
+
+          <div class="landing-day">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+          </div>
+
+
+          <!-- THU -->
+
+          <div class="landing-day">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+            <div class="landing-event landing-event-green">
+              Pack bags for travel
+              <span>8:00 AM</span>
+            </div>
+
+          </div>
+
+
+          <!-- FRI -->
+
+          <div class="landing-day landing-today-column">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+          </div>
+
+
+          <!-- SAT -->
+
+          <div class="landing-day">
+
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+            <div class="landing-hour-line"></div>
+
+            <div class="landing-event landing-event-orange">
+              Study chemistry
+              <span>9:00 AM</span>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- SIGN IN -->
+
+    <section class="landing-signin" id="signin-section">
+
+      <div class="landing-signin-card">
+
+        <div class="landing-signin-logo">
+          <svg
+            viewBox="0 0 160 60"
+            class="landing-logo-svg"
+            aria-hidden="true"
+          >
+            <text
+              x="0"
+              y="44"
+              class="landing-logo-text"
+            >
+              PLANNR
+            </text>
+          </svg>
+        </div>
+
+
+        <form
+          class="signin-form"
+          id="signin-form"
+        >
+
+          <label
+            class="signin-label"
+            for="signin-email"
+          >
+            Email
+          </label>
+
+          <input
+            type="email"
+            id="signin-email"
+            class="signin-input"
+            placeholder="you@school.edu"
+            autocomplete="email"
+          >
+
+
+          <label
+            class="signin-label"
+            for="signin-password"
+          >
+            Password
+          </label>
+
+          <input
+            type="password"
+            id="signin-password"
+            class="signin-input"
+            placeholder="••••••••"
+            autocomplete="current-password"
+          >
+
+
+          <div class="signin-actions">
+
+            <button
+              type="submit"
+              class="signin-btn"
+            >
+              Sign in
+            </button>
+
+            <button
+              type="button"
+              id="signup-btn"
+              class="signup-btn"
+            >
+              Create account
+            </button>
+
+          </div>
+
+          <p class="signin-note">
+            Use your email and password to sign in or create your Plannr account.
+          </p>
+
+        </form>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- SUPABASE -->
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- EXISTING AUTH LOGIC — DO NOT REMOVE -->
+
   <script src="js/landing.js"></script>
+
 </body>
 </html>
