@@ -35,11 +35,14 @@ body {
 /* --- Header / logo --- */
 
 .topbar {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .logo {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .logo-svg {
@@ -62,9 +65,10 @@ body {
 }
 
 .tagline {
-  margin: 0 0 18px;
+  margin: 0;
   color: var(--text-dim);
   font-size: 0.98rem;
+  line-height: 1.4;
 }
 
 .tab-nav {
@@ -321,9 +325,8 @@ body {
   position: absolute;
   left: 3px;
   right: 3px;
-  background: var(--surface-raised);
-  border-left: 3px solid var(--accent-red);
-  border-radius: 3px;
+  border-left: 3px solid;
+  border-radius: 5px;
   padding: 5px 6px;
   font-size: 0.78rem;
   line-height: 1.25;
@@ -332,10 +335,70 @@ body {
   animation: slide-in 0.25s ease-out;
 }
 
+/* Different colors for calendar events */
+.task-block.event-color-1 {
+  background: #FF6B4A;
+  border-left-color: #FF6B4A;
+  color: #14171F;
+}
+
+.task-block.event-color-2 {
+  background: #6EA8FE;
+  border-left-color: #6EA8FE;
+  color: #14171F;
+}
+
+.task-block.event-color-3 {
+  background: #B38CFF;
+  border-left-color: #B38CFF;
+  color: #14171F;
+}
+
+.task-block.event-color-4 {
+  background: #F2C94C;
+  border-left-color: #F2C94C;
+  color: #14171F;
+}
+
+.task-block.event-color-5 {
+  background: #63D6D0;
+  border-left-color: #63D6D0;
+  color: #14171F;
+}
+
+.task-block.event-color-6 {
+  background: #F48FB1;
+  border-left-color: #F48FB1;
+  color: #14171F;
+}
+
+/* Keep the event's color when it is completed */
 .task-block.is-done {
-  border-left-color: var(--accent-green);
-  opacity: 0.6;
+  opacity: 0.55;
   text-decoration: line-through;
+}
+
+.task-block .task-title {
+  font-weight: 500;
+  color: inherit;
+  display: block;
+}
+
+.task-block .task-time {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+}
+
+@keyframes slide-in {
+  from { 
+    transform: translateX(-6px); 
+    opacity: 0; 
+  }
+  to { 
+    transform: translateX(0); 
+    opacity: 1; 
+  }
 }
 
 .task-block .task-title {
@@ -535,18 +598,20 @@ body.landing {
 }
 
 .signup-btn {
-  padding: 12px 18px;
-  border: none;
-  border-radius: 8px;
+  margin-top: 20px;
   background: var(--accent-red);
   color: #14171F;
-  font-family: inherit;
+  border: none;
+  border-radius: 5px;
+  font-family: var(--font-body);
   font-weight: 600;
+  font-size: 0.95rem;
+  padding: 12px;
   cursor: pointer;
 }
 
 .signup-btn:hover {
-  opacity: 0.9;
+  opacity: 0.88;
 }
 
 .signup-btn:disabled {
@@ -619,6 +684,20 @@ body.landing {
   border: 1px solid #ccc;
   border-radius: 8px;
   font-family: inherit;
+}
+
+.event-modal-card input {
+  color: #111111;
+  background: #ffffff;
+}
+
+.event-modal-card input::placeholder {
+  color: #666666;
+}
+
+.event-modal-card input:focus {
+  outline: none;
+  border-color: #111111;
 }
 
 .event-modal-actions {
