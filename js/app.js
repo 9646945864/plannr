@@ -1685,9 +1685,8 @@ async function createTask(
   const task = {
 
     id:
-      "t_" +
-      Date.now(),
-
+      crypto.randomUUID(),
+     
     title:
       parsed.title ||
       rawText,
