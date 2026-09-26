@@ -2007,6 +2007,38 @@ async function initializeApp() {
 
   console.log("Signed in as:", user.email);
 
+  const { data: cloudTasks, error: tasksError } =
+    await supabaseClient
+      .from("tasks")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("scheduled_start", {
+        ascending: true
+      });
+
+  if (tasksError) {
+    console.error(
+      "Could not load tasks from Supabase:",
+      tasksError
+    );
+  } else if (cloudTasks) {
+    tasks = cloudTasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      durationMinutes: task.duration_minutes,
+      scheduledStart: task.scheduled_start,
+      deadline: task.deadline,
+      preferredTime: task.preferred_time,
+      status: task.status,
+      type: "task"
+    }));
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(tasks)
+    );
+  }
+
   renderWeekLabel();
   renderCalendar();
 }
