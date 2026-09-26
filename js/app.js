@@ -916,16 +916,22 @@ function placeTasksOnGrid() {
     const block =
       document.createElement("div");
 
-
     block.className =
-      "task-block" +
+      "task-block event-color-" +
+      (
+        Math.abs(
+          [...task.id].reduce(
+            (sum, char) => sum + char.charCodeAt(0),
+            0
+          )
+        ) % 6 + 1
+      ) +
       (
         task.status === "done"
           ? " is-done"
           : ""
       );
-
-
+     
     block.style.top =
       `${topPx}px`;
 
