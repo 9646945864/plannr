@@ -76,7 +76,6 @@ function loadTasks() {
   }
 }
 
-
 async function saveTasks() {
   try {
     // Keep the local backup
@@ -96,34 +95,82 @@ async function saveTasks() {
       return;
     }
 
-    // Save the current tasks to Supabase
-    const rows = tasks.map((task) => ({
-      id: task.id,
-      user_id: user.id,
-      title: task.title,
-      duration_minutes: task.durationMinutes || 60,
-      scheduled_start: task.scheduledStart || null,
-      deadline: task.deadline || null,
-      preferred_time: task.preferredTime || null,
-      status: task.status || "scheduled"
-    }));
+    // Get the tasks currently stored for this user
+    const { data: existingTasks, error: fetchError } =
+      await supabaseClient
+        .from("tasks")
+        .select("id")
+        .eq("user_id", user.id);
 
-    if (rows.length === 0) {
+    if (fetchError) {
+      console.error(
+        "Could not check existing Supabase tasks:",
+        fetchError
+      );
       return;
     }
 
-    const { error } = await supabaseClient
-      .from("tasks")
-      .upsert(rows);
+    // Find tasks that were deleted from Plannr
+    const currentIds = new Set(
+      tasks.map((task) => task.id)
+    );
 
-    if (error) {
-      console.error("Could not save tasks to Supabase:", error);
-    } else {
-      console.log("Tasks saved to Supabase.");
+    const deletedIds =
+      (existingTasks || [])
+        .filter((task) => !currentIds.has(task.id))
+        .map((task) => task.id);
+
+    // Delete them from Supabase
+    if (deletedIds.length > 0) {
+      const { error: deleteError } =
+        await supabaseClient
+          .from("tasks")
+          .delete()
+          .eq("user_id", user.id)
+          .in("id", deletedIds);
+
+      if (deleteError) {
+        console.error(
+          "Could not delete tasks from Supabase:",
+          deleteError
+        );
+        return;
+      }
     }
 
+    // Save the tasks that still exist
+    if (tasks.length > 0) {
+      const rows = tasks.map((task) => ({
+        id: task.id,
+        user_id: user.id,
+        title: task.title,
+        duration_minutes: task.durationMinutes || 60,
+        scheduled_start: task.scheduledStart || null,
+        deadline: task.deadline || null,
+        preferred_time: task.preferredTime || null,
+        status: task.status || "scheduled"
+      }));
+
+      const { error } = await supabaseClient
+        .from("tasks")
+        .upsert(rows);
+
+      if (error) {
+        console.error(
+          "Could not save tasks to Supabase:",
+          error
+        );
+        return;
+      }
+    }
+
+    console.log("Tasks synced with Supabase.");
+
   } catch (err) {
-    console.error("Could not save tasks:", err);
+    console.error(
+      "Could not sync tasks:",
+      err
+    );
   }
 }
 
