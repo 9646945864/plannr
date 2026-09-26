@@ -741,3 +741,454 @@ body.landing {
   color: #14171F;
 }
 
+/* ============================================================
+   PLANNR HOMEPAGE — UI DEMO DESIGN
+   ============================================================ */
+
+body.landing {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  background: #000000;
+  color: var(--text);
+}
+
+.landing-app {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 42px 0 70px;
+}
+
+/* ---------- Header ---------- */
+
+.landing-topbar {
+  margin-bottom: 30px;
+}
+
+.landing-logo {
+  width: 160px;
+  height: 40px;
+  margin: 0;
+}
+
+.landing-logo-svg {
+  width: 160px;
+  height: 40px;
+  display: block;
+}
+
+.landing-logo-text {
+  font-family: "Shrikhand", cursive;
+  font-size: 40px;
+  letter-spacing: -0.01em;
+  fill: var(--text);
+  transform: skewX(-8deg);
+  transform-origin: 0 34px;
+}
+
+.landing-tagline {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+
+/* ---------- AI command ---------- */
+
+.landing-command {
+  margin-bottom: 30px;
+}
+
+.landing-task-form {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  background: #141414;
+  border: 1px solid #292929;
+  border-radius: 7px;
+
+  padding: 6px 6px 6px 16px;
+}
+
+.landing-task-form input {
+  flex: 1;
+  min-width: 0;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  color: #F5F3EE;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+}
+
+.landing-task-form input::placeholder {
+  color: #626B7E;
+}
+
+.landing-task-button {
+  flex-shrink: 0;
+
+  border: none;
+  border-radius: 5px;
+
+  background: var(--accent-red);
+  color: #14171F;
+
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.landing-task-button:hover {
+  opacity: 0.88;
+}
+
+
+/* ---------- Week navigation ---------- */
+
+.landing-calendar-section {
+  width: 100%;
+}
+
+.landing-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.landing-week-nav h2 {
+  margin: 0;
+  min-width: 180px;
+
+  color: var(--text);
+
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.landing-week-arrow {
+  width: 30px;
+  height: 30px;
+
+  border: 1px solid #303030;
+  border-radius: 50%;
+
+  background: #141414;
+  color: var(--text);
+
+  font-size: 0.9rem;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.landing-week-arrow:hover {
+  border-color: var(--accent-red);
+}
+
+.landing-add-event {
+  margin-left: auto;
+
+  border: none;
+  border-radius: 6px;
+
+  background: var(--accent-red);
+  color: #14171F;
+
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  font-weight: 600;
+
+  padding: 9px 14px;
+  cursor: pointer;
+}
+
+.landing-add-event:hover {
+  opacity: 0.88;
+}
+
+
+/* ---------- Calendar ---------- */
+
+.landing-calendar {
+  width: 100%;
+
+  border-top: 1px solid #292929;
+  border-left: 1px solid #292929;
+
+  background: #141414;
+}
+
+.landing-calendar-header {
+  display: grid;
+  grid-template-columns: 54px repeat(7, 1fr);
+
+  min-height: 44px;
+}
+
+.landing-calendar-header > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-right: 1px solid #292929;
+  border-bottom: 1px solid #292929;
+
+  color: var(--text-dim);
+
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.landing-time-header {
+  background: #101010;
+}
+
+.landing-calendar-header .landing-today {
+  position: relative;
+
+  color: var(--accent-red);
+  font-weight: 600;
+
+  background: rgba(255, 107, 74, 0.08);
+}
+
+.landing-today span {
+  position: absolute;
+  bottom: 3px;
+
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+
+/* ---------- Calendar body ---------- */
+
+.landing-calendar-body {
+  display: grid;
+  grid-template-columns: 54px repeat(7, 1fr);
+
+  height: 260px;
+}
+
+.landing-times {
+  display: flex;
+  flex-direction: column;
+
+  border-right: 1px solid #292929;
+}
+
+.landing-times div {
+  height: 65px;
+
+  padding: 7px 7px 0 0;
+
+  color: #626B7E;
+
+  font-size: 0.65rem;
+  text-align: right;
+}
+
+.landing-day {
+  position: relative;
+
+  border-right: 1px solid #292929;
+
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 64px,
+      #252525 64px,
+      #252525 65px
+    );
+}
+
+.landing-today-column {
+  background-color: rgba(255, 107, 74, 0.045);
+
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 64px,
+      #252525 64px,
+      #252525 65px
+    );
+}
+
+.landing-hour-line {
+  display: none;
+}
+
+
+/* ---------- Preview events ---------- */
+
+.landing-event {
+  position: absolute;
+
+  left: 4px;
+  right: 4px;
+
+  padding: 6px 7px;
+
+  border-left: 3px solid;
+
+  border-radius: 3px;
+
+  background: #1E1E1E;
+
+  color: var(--text);
+
+  font-size: 0.68rem;
+  line-height: 1.25;
+  font-weight: 500;
+}
+
+.landing-event span {
+  display: block;
+
+  margin-top: 2px;
+
+  color: var(--text-dim);
+
+  font-size: 0.58rem;
+  font-weight: 400;
+}
+
+.landing-event-purple {
+  top: 118px;
+  border-left-color: #B38CFF;
+}
+
+.landing-event-red {
+  top: 8px;
+  border-left-color: #E76F51;
+}
+
+.landing-event-green {
+  top: 73px;
+  border-left-color: #8FBF8A;
+}
+
+.landing-event-orange {
+  top: 138px;
+  border-left-color: #FF914D;
+}
+
+
+/* ---------- Sign in ---------- */
+
+.landing-signin {
+  display: flex;
+  justify-content: center;
+
+  margin-top: 80px;
+  padding-top: 60px;
+
+  border-top: 1px solid #1E1E1E;
+}
+
+.landing-signin-card {
+  width: 100%;
+  max-width: 320px;
+}
+
+.landing-signin-logo {
+  width: 160px;
+  height: 40px;
+  margin: 0 auto 24px;
+}
+
+.signin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.signin-actions button {
+  flex: 1;
+}
+
+.signup-btn {
+  margin-top: 20px;
+
+  background: var(--accent-red);
+  color: #14171F;
+
+  border: none;
+  border-radius: 5px;
+
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.95rem;
+
+  padding: 12px;
+
+  cursor: pointer;
+}
+
+.signup-btn:hover {
+  opacity: 0.88;
+}
+
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 720px) {
+
+  .landing-app {
+    width: calc(100% - 24px);
+    padding-top: 24px;
+  }
+
+  .landing-task-form {
+    min-height: 48px;
+  }
+
+  .landing-task-button {
+    padding: 9px 11px;
+  }
+
+  .landing-week-nav h2 {
+    min-width: 140px;
+    font-size: 0.88rem;
+  }
+
+  .landing-calendar-body {
+    height: 220px;
+  }
+
+  .landing-times div {
+    height: 55px;
+  }
+
+  .landing-day {
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 54px,
+        #252525 54px,
+        #252525 55px
+      );
+  }
+
+  .landing-event {
+    font-size: 0.58rem;
+  }
+
+}
+
