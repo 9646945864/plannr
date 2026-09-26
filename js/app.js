@@ -1547,7 +1547,7 @@ function deleteTaskWithAI(
 
 /* ---------- CREATE TASK ---------- */
 
-function createTask(
+async function createTask(
   parsed,
   rawText
 ) {
@@ -1714,7 +1714,7 @@ function createTask(
 
   tasks.push(task);
 
-  saveTasks();
+  await saveTasks();
 
 
   /*
