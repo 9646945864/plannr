@@ -36,6 +36,7 @@ body {
 
 .topbar {
   margin-bottom: 32px;
+  padding-left: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -43,6 +44,7 @@ body {
 
 .logo {
   margin-bottom: 4px;
+  padding-left: 0;
 }
 
 .logo-svg {
@@ -325,6 +327,7 @@ body {
   position: absolute;
   left: 3px;
   right: 3px;
+  background: var(--surface-raised);
   border-left: 3px solid;
   border-radius: 5px;
   padding: 5px 6px;
@@ -335,57 +338,45 @@ body {
   animation: slide-in 0.25s ease-out;
 }
 
-/* Different colors for calendar events */
+/* Different shades of orange for calendar events */
 .task-block.event-color-1 {
-  background: #FF6B4A;
   border-left-color: #FF6B4A;
-  color: #14171F;
 }
 
 .task-block.event-color-2 {
-  background: #6EA8FE;
-  border-left-color: #6EA8FE;
-  color: #14171F;
+  border-left-color: #FF7F50;
 }
 
 .task-block.event-color-3 {
-  background: #B38CFF;
-  border-left-color: #B38CFF;
-  color: #14171F;
+  border-left-color: #FF914D;
 }
 
 .task-block.event-color-4 {
-  background: #F2C94C;
-  border-left-color: #F2C94C;
-  color: #14171F;
+  border-left-color: #F4A261;
 }
 
 .task-block.event-color-5 {
-  background: #63D6D0;
-  border-left-color: #63D6D0;
-  color: #14171F;
+  border-left-color: #E76F51;
 }
 
 .task-block.event-color-6 {
-  background: #F48FB1;
-  border-left-color: #F48FB1;
-  color: #14171F;
+  border-left-color: #FFB067;
 }
 
-/* Keep the event's color when it is completed */
+/* Keep the event's color when completed */
 .task-block.is-done {
-  opacity: 0.55;
+  opacity: 0.6;
   text-decoration: line-through;
 }
 
 .task-block .task-title {
   font-weight: 500;
-  color: inherit;
+  color: var(--text);
   display: block;
 }
 
 .task-block .task-time {
-  color: inherit;
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
 }
@@ -684,9 +675,7 @@ body.landing {
   border: 1px solid #ccc;
   border-radius: 8px;
   font-family: inherit;
-}
-
-.event-modal-card input {
+  font-size: 0.95rem;
   color: #111111;
   background: #ffffff;
 }
