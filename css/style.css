@@ -1192,3 +1192,216 @@ body.landing {
 
 }
 
+/* ============================================================
+   CHECK IT OUT
+   ============================================================ */
+
+.landing-checkout {
+  display: flex;
+  justify-content: center;
+
+  margin-top: 38px;
+
+  opacity: 0;
+  transform: translateY(12px);
+
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+
+.landing-calendar-preview.is-visible + .landing-checkout {
+  opacity: 1;
+  transform: translateY(0);
+
+  transition-delay: 0.9s;
+}
+
+.check-it-out-btn {
+  border: none;
+  border-radius: 7px;
+
+  padding: 12px 24px;
+
+  background: var(--accent-red);
+  color: #14171F;
+
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.check-it-out-btn:hover {
+  opacity: 0.88;
+  transform: translateY(-2px);
+}
+
+
+/* ============================================================
+   SIGN-IN PAGE
+   ============================================================ */
+
+.landing-signin {
+  min-height: 100vh;
+
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-top: 120px;
+  padding: 80px 20px;
+
+  border-top: 1px solid #1E1E1E;
+}
+
+.landing-signin-card {
+  width: 100%;
+  max-width: 360px;
+
+  text-align: center;
+}
+
+
+/* PLANNR logo on sign-in page */
+
+.signin-page-logo {
+  width: 200px;
+  height: 70px;
+
+  margin: 0 auto;
+}
+
+.signin-page-logo-svg {
+  width: 200px;
+  height: 70px;
+
+  display: block;
+}
+
+.signin-page-logo-text {
+  font-family: "Shrikhand", cursive;
+
+  font-size: 58px;
+
+  letter-spacing: -0.02em;
+
+  fill: var(--text);
+
+  transform: skewX(-8deg);
+  transform-origin: 0 48px;
+}
+
+.signin-page-tagline {
+  margin: 4px 0 36px;
+
+  color: var(--text-dim);
+
+  font-size: 0.9rem;
+}
+
+
+/* Sign-in form */
+
+.landing-signin .signin-form {
+  width: 100%;
+
+  text-align: left;
+}
+
+.landing-signin .signin-label {
+  display: block;
+
+  margin: 0 0 7px;
+
+  color: var(--text-dim);
+
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.landing-signin .signin-input {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  margin-bottom: 18px;
+  padding: 12px 13px;
+
+  border: 1px solid #2B2B2B;
+  border-radius: 6px;
+
+  background: #141414;
+  color: var(--text);
+
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+
+  outline: none;
+}
+
+.landing-signin .signin-input:focus {
+  border-color: var(--accent-red);
+}
+
+.landing-signin .signin-input::placeholder {
+  color: #626B7E;
+}
+
+.landing-signin .signin-actions {
+  display: flex;
+  gap: 8px;
+
+  margin-top: 4px;
+}
+
+.landing-signin .signin-actions button {
+  flex: 1;
+}
+
+.landing-signin .signin-btn,
+.landing-signin .signup-btn {
+  margin: 0;
+
+  padding: 11px 14px;
+
+  border-radius: 6px;
+
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.landing-signin .signin-btn {
+  border: none;
+
+  background: var(--accent-red);
+  color: #14171F;
+}
+
+.landing-signin .signup-btn {
+  border: 1px solid #303030;
+
+  background: #141414;
+  color: var(--text);
+}
+
+.landing-signin .signin-note {
+  margin-top: 18px;
+
+  color: #626B7E;
+
+  font-size: 0.72rem;
+  line-height: 1.5;
+
+  text-align: center;
+}
