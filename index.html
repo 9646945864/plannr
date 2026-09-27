@@ -19,17 +19,15 @@
 
 <body class="landing">
 
-  <!-- =========================
-       PLANNR HOMEPAGE PREVIEW
-       ========================= -->
-
   <main class="landing-app">
 
-    <!-- HEADER -->
+    <!-- =========================================
+         HERO
+    ========================================== -->
 
-    <header class="landing-topbar">
+    <section class="landing-hero">
 
-      <div class="landing-logo">
+      <div class="landing-hero-logo">
         <svg
           viewBox="0 0 160 60"
           class="landing-logo-svg"
@@ -46,41 +44,48 @@
         </svg>
       </div>
 
-      <p class="landing-tagline">
+      <p class="landing-hero-tagline">
         Tell it what you need to do. It finds the time.
       </p>
-
-    </header>
-
-
-    <!-- AI COMMAND -->
-
-    <section class="landing-command">
-
-      <form id="landing-task-form" class="landing-task-form">
-
-        <input
-          type="text"
-          id="landing-task-input"
-          placeholder="e.g. Study for chem test Thursday, need 3 hours, prefer evenings"
-          autocomplete="off"
-        >
-
-        <button
-          type="button"
-          class="landing-task-button"
-        >
-          Add to week
-        </button>
-
-      </form>
 
     </section>
 
 
-    <!-- WEEK NAVIGATION -->
+    <!-- =========================================
+         AI PROMPT
+    ========================================== -->
 
-    <section class="landing-calendar-section">
+    <section class="landing-command">
+
+      <div class="landing-task-form">
+
+        <div
+          id="landing-task-input"
+          class="landing-task-input"
+          aria-label="AI task prompt"
+        ></div>
+
+        <button
+          id="landing-task-button"
+          class="landing-task-button"
+          type="button"
+        >
+          Add to week
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- =========================================
+         CALENDAR PREVIEW
+    ========================================== -->
+
+    <section
+      id="landing-calendar-preview"
+      class="landing-calendar-preview"
+    >
 
       <div class="landing-week-nav">
 
@@ -112,11 +117,9 @@
       </div>
 
 
-      <!-- STATIC CALENDAR PREVIEW -->
-
       <div class="landing-calendar">
 
-        <!-- HEADER ROW -->
+        <!-- Calendar header -->
 
         <div class="landing-calendar-header">
 
@@ -138,23 +141,21 @@
         </div>
 
 
-        <!-- CALENDAR BODY -->
+        <!-- Calendar body -->
 
         <div class="landing-calendar-body">
 
-          <!-- TIME COLUMN -->
+          <!-- Time column -->
 
           <div class="landing-times">
-
             <div>7am</div>
             <div>8am</div>
             <div>9am</div>
             <div>10am</div>
-
           </div>
 
 
-          <!-- SUN -->
+          <!-- Sunday -->
 
           <div class="landing-day">
 
@@ -171,7 +172,7 @@
           </div>
 
 
-          <!-- MON -->
+          <!-- Monday -->
 
           <div class="landing-day">
 
@@ -183,7 +184,7 @@
           </div>
 
 
-          <!-- TUE -->
+          <!-- Tuesday -->
 
           <div class="landing-day">
 
@@ -200,7 +201,7 @@
           </div>
 
 
-          <!-- WED -->
+          <!-- Wednesday -->
 
           <div class="landing-day">
 
@@ -212,7 +213,7 @@
           </div>
 
 
-          <!-- THU -->
+          <!-- Thursday -->
 
           <div class="landing-day">
 
@@ -229,7 +230,7 @@
           </div>
 
 
-          <!-- FRI -->
+          <!-- Friday -->
 
           <div class="landing-day landing-today-column">
 
@@ -241,7 +242,7 @@
           </div>
 
 
-          <!-- SAT -->
+          <!-- Saturday -->
 
           <div class="landing-day">
 
@@ -264,28 +265,61 @@
     </section>
 
 
-    <!-- SIGN IN -->
+    <!-- =========================================
+         GET STARTED
+    ========================================== -->
 
-    <section class="landing-signin" id="signin-section">
+    <div class="landing-checkout">
+
+      <button
+        id="check-it-out-btn"
+        class="check-it-out-btn"
+        type="button"
+      >
+        Get Started
+      </button>
+
+    </div>
+
+
+    <!-- =========================================
+         SIGN IN
+    ========================================== -->
+
+    <section
+      class="landing-signin"
+      id="signin-section"
+    >
 
       <div class="landing-signin-card">
 
-        <div class="landing-signin-logo">
+        <!-- Sign-in page logo -->
+
+        <div class="signin-page-logo">
+
           <svg
             viewBox="0 0 160 60"
-            class="landing-logo-svg"
-            aria-hidden="true"
+            class="signin-page-logo-svg"
+            role="img"
+            aria-label="Plannr"
           >
             <text
               x="0"
               y="44"
-              class="landing-logo-text"
+              class="signin-page-logo-text"
             >
               PLANNR
             </text>
           </svg>
+
         </div>
 
+        <p class="signin-page-tagline">
+          Your time, planned.
+        </p>
+
+
+        <!-- Existing authentication form -->
 
         <form
           class="signin-form"
@@ -343,6 +377,7 @@
 
           </div>
 
+
           <p class="signin-note">
             Use your email and password to sign in or create your Plannr account.
           </p>
@@ -356,11 +391,11 @@
   </main>
 
 
-  <!-- SUPABASE -->
+  <!-- Supabase -->
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- EXISTING AUTH LOGIC — DO NOT REMOVE -->
+  <!-- Existing authentication -->
 
   <script src="js/landing.js"></script>
 
