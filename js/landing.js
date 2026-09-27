@@ -98,3 +98,96 @@ function setupSignIn() {
 }
 
 setupSignIn();
+
+/* ============================================================
+   HOMEPAGE DEMO ANIMATION
+   ============================================================ */
+
+function startHomepageDemo() {
+  const promptElement =
+    document.getElementById("landing-task-input");
+
+  const calendar =
+    document.getElementById("landing-calendar-preview");
+
+  const getStarted =
+    document.getElementById("get-started-btn");
+
+  if (!promptElement || !calendar || !getStarted) {
+    return;
+  }
+
+  const prompt =
+    "I have a chemistry test Thursday. I need 2 hours to study.";
+
+  let characterIndex = 0;
+
+  promptElement.textContent = "";
+
+  function typePrompt() {
+
+    if (characterIndex < prompt.length) {
+
+      promptElement.textContent +=
+        prompt[characterIndex];
+
+      characterIndex++;
+
+      setTimeout(typePrompt, 42);
+
+      return;
+    }
+
+    /* Wait until the prompt is completely typed */
+
+    setTimeout(() => {
+
+      calendar.classList.add("is-visible");
+
+      /* Give the calendar time to appear,
+         then reveal Get Started */
+
+      setTimeout(() => {
+
+        getStarted.classList.add("is-visible");
+
+      }, 1300);
+
+    }, 400);
+  }
+
+
+  /* Start typing after the hero has been visible */
+
+  setTimeout(typePrompt, 900);
+}
+
+
+startHomepageDemo();
+
+
+/* ============================================================
+   GET STARTED → SIGN IN
+   ============================================================ */
+
+const getStartedButton =
+  document.getElementById("get-started-btn");
+
+const signInSection =
+  document.getElementById("signin-section");
+
+if (getStartedButton && signInSection) {
+
+  getStartedButton.addEventListener(
+    "click",
+    () => {
+
+      signInSection.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+
+    }
+  );
+
+}
