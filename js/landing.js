@@ -124,48 +124,49 @@ function startHomepageDemo() {
 
   promptElement.textContent = "";
 
+  // Get Started is visible immediately,
+  // including while the prompt is typing.
+  getStarted.classList.add("is-visible");
+
   function typePrompt() {
-
     if (characterIndex < prompt.length) {
-
-      promptElement.textContent +=
-        prompt[characterIndex];
-
+      promptElement.textContent += prompt[characterIndex];
       characterIndex++;
 
       setTimeout(typePrompt, 42);
-
       return;
     }
 
-    /* Wait until the prompt is completely typed */
-
+    // Show calendar after typing finishes
     setTimeout(() => {
-
       calendar.classList.add("is-visible");
-
-      /* Give the calendar time to appear,
-         then reveal Get Started */
-
-      setTimeout(() => {
-
-        getStarted.classList.add("is-visible");
-
-      }, 1300);
-
     }, 400);
   }
-
-
-  /* Start typing after the hero has been visible */
 
   setTimeout(typePrompt, 900);
 }
 
-
 startHomepageDemo();
 
 
+/* ============================================================
+   GET STARTED → LOGIN PAGE
+   ============================================================ */
+
+const getStartedButton =
+  document.getElementById("get-started-btn");
+
+const signInSection =
+  document.getElementById("signin-section");
+
+if (getStartedButton && signInSection) {
+  getStartedButton.addEventListener("click", () => {
+    signInSection.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  });
+}
 /* ============================================================
    GET STARTED → SIGN IN
    ============================================================ */
