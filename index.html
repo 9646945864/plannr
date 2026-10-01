@@ -333,8 +333,84 @@
 
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script src="js/landing.js"></script>
 
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+
+    const promptElement =
+      document.getElementById("landing-task-input");
+
+    const calendar =
+      document.getElementById("landing-calendar-preview");
+
+    const getStarted =
+      document.getElementById("get-started-btn");
+
+    const signInSection =
+      document.getElementById("signin-section");
+  
+    if (!promptElement) {
+      console.log("Plannr: prompt element not found");
+      return;
+    }
+  
+    const prompt =
+      "I have a chemistry test Thursday. I need 2 hours to study.";
+  
+    let index = 0;
+  
+    /* Make sure the prompt starts empty */
+    promptElement.textContent = "";
+  
+    /* Get Started is visible immediately */
+    if (getStarted) {
+      getStarted.classList.add("is-visible");
+    }
+  
+    /* Type the prompt */
+    function typePrompt() {
+  
+      if (index < prompt.length) {
+  
+        promptElement.textContent =
+          prompt.substring(0, index + 1);
+  
+        index++;
+  
+        setTimeout(typePrompt, 45);
+  
+      } else {
+  
+        /* Show calendar after typing finishes */
+        if (calendar) {
+          setTimeout(function () {
+            calendar.classList.add("is-visible");
+          }, 500);
+        }
+  
+      }
+    }
+  
+    /* Start typing */
+    setTimeout(typePrompt, 800);
+  
+  
+    /* Get Started → Login */
+    if (getStarted && signInSection) {
+  
+      getStarted.addEventListener("click", function () {
+  
+        signInSection.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+  
+      });
+  
+    }
+  
+  });
+  </script>
 </body>
 </html>
