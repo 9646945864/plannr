@@ -438,39 +438,39 @@ body.landing {
    ============================================================ */
 
 .hero-section {
-  min-height: 100vh;
+  min-height: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 24px;
+  padding: 72px 24px 24px;
   text-align: center;
 }
 
 .hero-logo {
-  width: 300px;
-  height: 90px;
+  width: 190px;
+  height: 58px;
 }
 
 .hero-logo-svg {
-  width: 300px;
-  height: 90px;
+  width: 190px;
+  height: 58px;
   display: block;
 }
 
 .hero-logo-text {
   font-family: "Shrikhand", cursive;
-  font-size: 72px;
-  letter-spacing: -0.02em;
+  font-size: 42px;
+  letter-spacing: -0.01em;
   fill: var(--text);
   text-anchor: middle;
   transform: skewX(-8deg);
-  transform-origin: 150px 60px;
+  transform-origin: 95px 39px;
 }
 
 .hero-description {
   max-width: 620px;
-  margin: 22px 0 0;
+  margin: 14px 0 0;
   color: var(--text-dim);
   font-size: 1.02rem;
   line-height: 1.65;
@@ -482,8 +482,9 @@ body.landing {
 
 .demo-section {
   width: min(1000px, calc(100% - 40px));
+  min-height: calc(100vh - 250px);
   margin: 0 auto;
-  padding: 20px 0 120px;
+  padding: 12px 0 70px;
 }
 
 .demo-prompt {
@@ -728,7 +729,7 @@ body.landing {
 
 .get-started-btn {
   display: block;
-  margin: 38px auto 0;
+  margin: 26px auto 0;
   padding: 12px 24px;
   border: none;
   border-radius: 7px;
@@ -738,9 +739,9 @@ body.landing {
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  opacity: 0;
-  transform: translateY(10px);
-  pointer-events: none;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
   transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
@@ -774,25 +775,25 @@ body.landing {
 }
 
 .signin-brand {
-  width: 220px;
-  height: 70px;
+  width: 190px;
+  height: 58px;
   margin: 0 auto;
 }
 
 .signin-brand-svg {
-  width: 220px;
-  height: 70px;
+  width: 190px;
+  height: 58px;
   display: block;
 }
 
 .signin-brand-text {
   font-family: "Shrikhand", cursive;
-  font-size: 58px;
-  letter-spacing: -0.02em;
+  font-size: 42px;
+  letter-spacing: -0.01em;
   fill: var(--text);
   text-anchor: middle;
   transform: skewX(-8deg);
-  transform-origin: 110px 46px;
+  transform-origin: 95px 39px;
 }
 
 .signin-tagline {
@@ -880,19 +881,19 @@ body.landing {
 
 @media (max-width: 720px) {
   .hero-section {
-    min-height: 90vh;
-    padding: 40px 20px;
+    min-height: auto;
+    padding: 48px 20px 20px;
   }
 
   .hero-logo,
   .hero-logo-svg {
-    width: 240px;
-    height: 75px;
+    width: 170px;
+    height: 52px;
   }
 
   .hero-logo-text {
-    font-size: 58px;
-    transform-origin: 120px 50px;
+    font-size: 38px;
+    transform-origin: 85px 35px;
   }
 
   .hero-description {
@@ -941,7 +942,7 @@ body.landing {
   }
 
   .signin-brand-text {
-    font-size: 50px;
-    transform-origin: 95px 42px;
+    font-size: 42px;
+    transform-origin: 95px 39px;
   }
 }
