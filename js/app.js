@@ -1842,7 +1842,7 @@ async function handleAddTask(
       parsed.action === "create"
     ) {
 
-      createTask(
+      await createTask(
         parsed,
         rawText
       );
@@ -2069,7 +2069,8 @@ function setupApp() {
 
   /* ---------- INITIAL RENDER ---------- */
 
-  initializeApp();
+  renderWeekLabel();
+  renderCalendar();
 
 }
 
