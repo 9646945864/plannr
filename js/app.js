@@ -1964,50 +1964,57 @@ document
     handleNextWeek
   );
 
-
 /* ---------- MANUAL EVENT BUTTON ---------- */
 
-document
-  .getElementById(
-    "add-event-btn"
-  )
-  .addEventListener(
-    "click",
-    () => {
+document.addEventListener("DOMContentLoaded", () => {
 
-      document
-        .getElementById(
-          "event-modal"
-        )
-        .classList.remove(
-          "is-hidden"
-        );
+  const addEventButton =
+    document.getElementById("add-event-btn");
 
+  const eventModal =
+    document.getElementById("event-modal");
 
-      document
-        .getElementById(
-          "event-date"
-        ).value =
-        formatDateISO(
-          new Date()
-        );
+  const eventDate =
+    document.getElementById("event-date");
+
+  const eventStart =
+    document.getElementById("event-start");
+
+  const eventEnd =
+    document.getElementById("event-end");
 
 
-      document
-        .getElementById(
-          "event-start"
-        ).value =
-        "17:00";
+  if (!addEventButton) {
+    console.error("Plannr: add-event-btn was not found.");
+    return;
+  }
+
+  if (!eventModal) {
+    console.error("Plannr: event-modal was not found.");
+    return;
+  }
 
 
-      document
-        .getElementById(
-          "event-end"
-        ).value =
-        "18:00";
+  addEventButton.addEventListener("click", () => {
 
+    eventModal.classList.remove("is-hidden");
+
+    if (eventDate) {
+      eventDate.value =
+        formatDateISO(new Date());
     }
-  );
+
+    if (eventStart) {
+      eventStart.value = "17:00";
+    }
+
+    if (eventEnd) {
+      eventEnd.value = "18:00";
+    }
+
+  });
+
+});
 
 
 /* ---------- CANCEL EVENT ---------- */
