@@ -443,7 +443,9 @@ body.landing {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 72px 24px 24px;
+
+  padding: 38px 24px 10px;
+
   text-align: center;
 }
 
@@ -470,10 +472,12 @@ body.landing {
 
 .hero-description {
   max-width: 620px;
-  margin: 14px 0 0;
+
+  margin: 8px 0 0;
+
   color: var(--text-dim);
-  font-size: 1.02rem;
-  line-height: 1.65;
+  font-size: 0.98rem;
+  line-height: 1.5;
 }
 
 /* ============================================================
@@ -482,9 +486,12 @@ body.landing {
 
 .demo-section {
   width: min(1000px, calc(100% - 40px));
-  min-height: calc(100vh - 250px);
+
+  min-height: auto;
+
   margin: 0 auto;
-  padding: 12px 0 70px;
+
+  padding: 8px 0 50px;
 }
 
 .demo-prompt {
@@ -545,7 +552,7 @@ body.landing {
 
 .preview-calendar {
   width: 100%;
-  margin-top: 24px;
+  margin-top: 16px;
   opacity: 0;
   transform: translateY(25px);
   visibility: hidden;
@@ -729,31 +736,31 @@ body.landing {
 
 .get-started-btn {
   display: block;
-  margin: 26px auto 0;
+
+  margin: 16px auto 0;
+
   padding: 12px 24px;
+
   border: none;
   border-radius: 7px;
+
   background: var(--accent-red);
   color: #14171F;
+
   font-family: var(--font-body);
   font-size: 0.9rem;
   font-weight: 600;
+
   cursor: pointer;
+
   opacity: 1;
   transform: translateY(0);
-  pointer-events: auto;
-  transition: opacity 0.5s ease, transform 0.5s ease;
-}
 
-.get-started-btn.is-visible {
-  opacity: 1;
-  transform: translateY(0);
   pointer-events: auto;
-}
 
-.get-started-btn:hover {
-  opacity: 0.88;
-  transform: translateY(-2px);
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
 }
 
 /* ============================================================
