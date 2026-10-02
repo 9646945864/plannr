@@ -1935,38 +1935,48 @@ function handleNextWeek() {
 
 /* ---------- 12. INITIALIZATION ---------- */
 
-document
-  .getElementById(
-    "task-form"
-  )
-  .addEventListener(
-    "submit",
-    handleAddTask
-  );
+function setupApp() {
+
+  /* ---------- AI TASK FORM ---------- */
+
+  const taskForm =
+    document.getElementById("task-form");
+
+  if (taskForm) {
+    taskForm.addEventListener(
+      "submit",
+      handleAddTask
+    );
+  }
 
 
-document
-  .getElementById(
-    "prev-week"
-  )
-  .addEventListener(
-    "click",
-    handlePrevWeek
-  );
+  /* ---------- PREVIOUS WEEK ---------- */
+
+  const prevWeek =
+    document.getElementById("prev-week");
+
+  if (prevWeek) {
+    prevWeek.addEventListener(
+      "click",
+      handlePrevWeek
+    );
+  }
 
 
-document
-  .getElementById(
-    "next-week"
-  )
-  .addEventListener(
-    "click",
-    handleNextWeek
-  );
+  /* ---------- NEXT WEEK ---------- */
 
-/* ---------- MANUAL EVENT BUTTON ---------- */
+  const nextWeek =
+    document.getElementById("next-week");
 
-document.addEventListener("DOMContentLoaded", () => {
+  if (nextWeek) {
+    nextWeek.addEventListener(
+      "click",
+      handleNextWeek
+    );
+  }
+
+
+  /* ---------- ADD EVENT ---------- */
 
   const addEventButton =
     document.getElementById("add-event-btn");
@@ -1984,122 +1994,99 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("event-end");
 
 
-  if (!addEventButton) {
-    console.error("Plannr: add-event-btn was not found.");
-    return;
-  }
+  if (addEventButton && eventModal) {
 
-  if (!eventModal) {
-    console.error("Plannr: event-modal was not found.");
-    return;
-  }
+    addEventButton.addEventListener(
+      "click",
+      () => {
 
-
-  addEventButton.addEventListener("click", () => {
-
-    eventModal.classList.remove("is-hidden");
-
-    if (eventDate) {
-      eventDate.value =
-        formatDateISO(new Date());
-    }
-
-    if (eventStart) {
-      eventStart.value = "17:00";
-    }
-
-    if (eventEnd) {
-      eventEnd.value = "18:00";
-    }
-
-  });
-
-});
-
-
-/* ---------- CANCEL EVENT ---------- */
-
-document
-  .getElementById(
-    "cancel-event-btn"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      document
-        .getElementById(
-          "event-modal"
-        )
-        .classList.add(
+        eventModal.classList.remove(
           "is-hidden"
         );
 
-    }
-  );
+        if (eventDate) {
+          eventDate.value =
+            formatDateISO(new Date());
+        }
 
+        if (eventStart) {
+          eventStart.value = "17:00";
+        }
 
-/* ---------- EVENT FORM ---------- */
+        if (eventEnd) {
+          eventEnd.value = "18:00";
+        }
 
-document
-  .getElementById(
-    "event-form"
-  )
-  .addEventListener(
-    "submit",
-    handleAddEvent
-  );
+      }
+    );
 
+  } else {
 
-/* ---------- INITIAL RENDER ---------- */
-
-async function initializeApp() {
-  const {
-    data: { user },
-    error
-  } = await supabaseClient.auth.getUser();
-
-  if (error || !user) {
-    window.location.href = "index.html";
-    return;
-  }
-
-  console.log("Signed in as:", user.email);
-
-  const { data: cloudTasks, error: tasksError } =
-    await supabaseClient
-      .from("tasks")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("scheduled_start", {
-        ascending: true
-      });
-
-  if (tasksError) {
     console.error(
-      "Could not load tasks from Supabase:",
-      tasksError
+      "Plannr: Add Event elements not found."
     );
-  } else if (cloudTasks) {
-    tasks = cloudTasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      durationMinutes: task.duration_minutes,
-      scheduledStart: task.scheduled_start,
-      deadline: task.deadline,
-      preferredTime: task.preferred_time,
-      status: task.status,
-      type: "task"
-    }));
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(tasks)
-    );
   }
 
-  renderWeekLabel();
-  renderCalendar();
+
+  /* ---------- CANCEL EVENT ---------- */
+
+  const cancelEventButton =
+    document.getElementById(
+      "cancel-event-btn"
+    );
+
+  if (cancelEventButton && eventModal) {
+
+    cancelEventButton.addEventListener(
+      "click",
+      () => {
+
+        eventModal.classList.add(
+          "is-hidden"
+        );
+
+      }
+    );
+
+  }
+
+
+  /* ---------- EVENT FORM ---------- */
+
+  const eventForm =
+    document.getElementById("event-form");
+
+  if (eventForm) {
+
+    eventForm.addEventListener(
+      "submit",
+      handleAddEvent
+    );
+
+  }
+
+
+  /* ---------- INITIAL RENDER ---------- */
+
+  initializeApp();
+
 }
 
-initializeApp();
+
+/* Start the app */
+
+if (
+  document.readyState === "loading"
+) {
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    setupApp
+  );
+
+} else {
+
+  setupApp();
+
+}
