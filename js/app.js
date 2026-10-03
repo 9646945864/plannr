@@ -2091,16 +2091,3 @@ if (
   setupApp();
 
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-  const button = document.getElementById("add-event-btn");
-  const modal = document.getElementById("event-modal");
-
-  console.log("BUTTON:", button);
-  console.log("MODAL:", modal);
-
-  button.addEventListener("click", () => {
-    console.log("ADD EVENT CLICKED");
-    modal.classList.remove("is-hidden");
-  });
-});
