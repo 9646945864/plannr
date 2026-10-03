@@ -953,3 +953,113 @@ body.landing {
     transform-origin: 95px 39px;
   }
 }
+
+/* ============================================================
+   ADD EVENT MODAL
+   ============================================================ */
+
+.event-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.event-modal.is-hidden {
+  display: none;
+}
+
+.event-modal-card {
+  width: min(420px, 100%);
+
+  background: var(--surface-raised);
+  border: 1px solid var(--grid-line-strong);
+  border-radius: 10px;
+
+  padding: 24px;
+
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.event-modal-card h2 {
+  margin: 0 0 20px;
+  font-size: 1.2rem;
+}
+
+#event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#event-form label {
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+#event-form input {
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 10px 12px;
+
+  background: var(--surface);
+  border: 1px solid var(--grid-line-strong);
+  border-radius: 6px;
+
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+}
+
+#event-form input:focus {
+  outline: none;
+  border-color: var(--accent-red);
+}
+
+.event-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+
+  margin-top: 20px;
+}
+
+.event-modal-actions button {
+  padding: 10px 16px;
+
+  border-radius: 6px;
+
+  font-family: var(--font-body);
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+#cancel-event-btn {
+  border: 1px solid var(--grid-line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+#cancel-event-btn:hover {
+  border-color: var(--accent-red);
+}
+
+#event-form button[type="submit"] {
+  border: none;
+  background: var(--accent-red);
+  color: #14171F;
+}
+
+#event-form button[type="submit"]:hover {
+  opacity: 0.88;
+}
