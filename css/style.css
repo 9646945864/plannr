@@ -1063,3 +1063,37 @@ body.landing {
 #event-form button[type="submit"]:hover {
   opacity: 0.88;
 }
+
+/* ============================================================
+   ADD EVENT BUTTON
+   ============================================================ */
+
+.add-event-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 9px 16px;
+
+  background: var(--accent-red);
+  color: #14171F;
+
+  border: none;
+  border-radius: 6px;
+
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.add-event-btn:hover {
+  opacity: 0.88;
+}
+
+.add-event-btn:active {
+  transform: translateY(1px);
+}
+
