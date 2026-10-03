@@ -392,8 +392,6 @@ function findOpenSlot(task) {
 }
 
 
-/* ---------- SCORE TIME SLOT ---------- */
-
 function scoreTimeSlot(
   candidateStart,
   candidateEnd,
@@ -403,26 +401,24 @@ function scoreTimeSlot(
   let score = 0;
 
   const hour = candidateStart.getHours();
+  const candidateDate = formatDateISO(candidateStart);
 
-  /*
-     Strongly prefer earlier dates and times.
-     Every hour into the future slightly lowers
-     the score, so today/tomorrow wins naturally.
-  */
+  /* ============================================================
+     1. PREFER EARLIER TIMES
+     ============================================================ */
 
   const hoursFromNow =
     (
-      candidateStart.getTime() -
-      Date.now()
+      candidateStart.getTime() - Date.now()
     ) /
     (1000 * 60 * 60);
 
   score -= hoursFromNow * 2;
 
 
-  /*
-     Preferred time
-  */
+  /* ============================================================
+     2. PREFERRED TIME OF DAY
+     ============================================================ */
 
   if (
     task.preferredTime === "morning" &&
@@ -449,18 +445,18 @@ function scoreTimeSlot(
   }
 
 
-  /*
-     Avoid extremely late times.
-  */
+  /* ============================================================
+     3. AVOID VERY LATE TIMES
+     ============================================================ */
 
   if (hour >= 21) {
-    score -= 15;
+    score -= 20;
   }
 
 
-  /*
-     Deadline pressure.
-  */
+  /* ============================================================
+     4. DEADLINE URGENCY
+     ============================================================ */
 
   const hoursUntilDeadline =
     (
@@ -470,40 +466,152 @@ function scoreTimeSlot(
     (1000 * 60 * 60);
 
   if (hoursUntilDeadline <= 24) {
-    score += 30;
+    score += 40;
   } else if (hoursUntilDeadline <= 48) {
-    score += 20;
+    score += 25;
   } else if (hoursUntilDeadline <= 72) {
     score += 10;
   }
 
 
-  /*
-     Avoid putting too many tasks
-     on the same day.
-  */
+  /* ============================================================
+     5. DON'T OVERLOAD ONE DAY
+     ============================================================ */
 
-  const candidateDate =
-    formatDateISO(candidateStart);
+  const tasksThatDay = tasks.filter((t) => {
+    if (
+      t.status !== "scheduled" ||
+      !t.scheduledStart
+    ) {
+      return false;
+    }
 
-  const tasksThatDay =
-    tasks.filter((t) => {
+    return (
+      formatDateISO(
+        new Date(t.scheduledStart)
+      ) === candidateDate
+    );
+  });
 
-      if (
-        t.status !== "scheduled" ||
-        !t.scheduledStart
-      ) {
-        return false;
-      }
+  score -= tasksThatDay.length * 8;
 
-      return (
-        formatDateISO(
-          new Date(t.scheduledStart)
-        ) === candidateDate
+
+  /* ============================================================
+     6. PREFER A LITTLE SPACE BETWEEN COMMITMENTS
+     ============================================================ */
+
+  tasksThatDay.forEach((existingTask) => {
+    const existingStart =
+      new Date(existingTask.scheduledStart);
+
+    const existingEnd =
+      new Date(
+        existingStart.getTime() +
+        existingTask.durationMinutes * 60 * 1000
       );
-    });
 
-  score -= tasksThatDay.length * 5;
+    const gapBefore =
+      (
+        candidateStart.getTime() -
+        existingEnd.getTime()
+      ) /
+      (1000 * 60);
+
+    const gapAfter =
+      (
+        existingStart.getTime() -
+        candidateEnd.getTime()
+      ) /
+      (1000 * 60);
+
+    /*
+       Small gaps are awkward.
+
+       Example:
+       4:00–4:30 task
+       4:30–5:00 new task
+
+       That's less desirable than giving the user
+       some breathing room.
+    */
+
+    if (gapBefore >= 0 && gapBefore < 15) {
+      score -= 15;
+    }
+
+    if (gapAfter >= 0 && gapAfter < 15) {
+      score -= 15;
+    }
+
+
+    /*
+       A healthy 15–60 minute gap is useful.
+    */
+
+    if (gapBefore >= 15 && gapBefore <= 60) {
+      score += 8;
+    }
+
+    if (gapAfter >= 15 && gapAfter <= 60) {
+      score += 8;
+    }
+  });
+
+
+  /* ============================================================
+     7. DON'T CREATE A RIDICULOUSLY PACKED DAY
+     ============================================================ */
+
+  const totalMinutesThatDay =
+    tasksThatDay.reduce(
+      (total, existingTask) =>
+        total +
+        (existingTask.durationMinutes || 0),
+      0
+    );
+
+  if (totalMinutesThatDay >= 300) {
+    score -= 20;
+  }
+
+  if (totalMinutesThatDay >= 420) {
+    score -= 35;
+  }
+
+
+  /* ============================================================
+     8. FAVOR TODAY/TOMORROW WITHOUT IGNORING DEADLINES
+     ============================================================ */
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(
+    tomorrow.getDate() + 1
+  );
+
+  if (
+    candidateStart >= today &&
+    candidateStart < tomorrow
+  ) {
+    score += 12;
+  }
+
+  const dayAfterTomorrow =
+    new Date(tomorrow);
+
+  dayAfterTomorrow.setDate(
+    dayAfterTomorrow.getDate() + 1
+  );
+
+  if (
+    candidateStart >= tomorrow &&
+    candidateStart < dayAfterTomorrow
+  ) {
+    score += 8;
+  }
+
 
   return score;
 }
