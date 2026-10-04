@@ -935,6 +935,8 @@ function renderCalendar() {
 
 
   placeTasksOnGrid();
+
+  runProactiveInsights();
 }
 
 
@@ -1308,6 +1310,471 @@ function setStatus(
   );
 }
 
+```javascript
+/* ============================================================
+   9.5. PROACTIVE INSIGHTS
+   Looks for tasks that are at risk of missing their deadline.
+   ============================================================ */
+
+function getTaskEnd(task) {
+  if (!task.scheduledStart) {
+    return null;
+  }
+
+  const start = new Date(task.scheduledStart);
+
+  return new Date(
+    start.getTime() +
+    (task.durationMinutes || 60) * 60 * 1000
+  );
+}
+
+
+/**
+ * Find the next available slot for a task.
+ *
+ * This uses the EXISTING scheduler, so we don't create
+ * a second scheduling system.
+ */
+function findInsightSlot(task) {
+  return findOpenSlot({
+    title: task.title,
+
+    durationMinutes:
+      task.durationMinutes || 60,
+
+    deadline:
+      task.deadline || null,
+
+    preferredTime:
+      task.preferredTime || null,
+
+    status: "scheduled",
+
+    scheduledStart: null,
+
+    type: "task"
+  });
+}
+
+
+/**
+ * Determine whether a task has enough scheduled time
+ * before its deadline.
+ *
+ * For now, each task is treated as one block because
+ * your current task model stores one scheduledStart.
+ */
+function analyzeTaskDeadline(task) {
+  if (
+    task.type !== "task" ||
+    task.status === "done" ||
+    !task.deadline
+  ) {
+    return null;
+  }
+
+  const now = new Date();
+
+  const deadline = new Date(
+    `${task.deadline}T23:59:59`
+  );
+
+  const scheduledStart =
+    task.scheduledStart
+      ? new Date(task.scheduledStart)
+      : null;
+
+  const scheduledEnd =
+    scheduledStart
+      ? getTaskEnd(task)
+      : null;
+
+
+  /*
+     Already scheduled after the deadline.
+  */
+  if (
+    scheduledEnd &&
+    scheduledEnd > deadline
+  ) {
+    return {
+      type: "deadline",
+      severity: "high",
+      task,
+      message:
+        `"${task.title}" is scheduled after its deadline.`
+    };
+  }
+
+
+  /*
+     Task has no scheduled time yet.
+  */
+  if (!scheduledStart) {
+
+    const hoursUntilDeadline =
+      (
+        deadline.getTime() -
+        now.getTime()
+      ) /
+      (1000 * 60 * 60);
+
+    if (hoursUntilDeadline <= 48) {
+
+      const suggestedSlot =
+        findInsightSlot(task);
+
+      return {
+        type: "unscheduled",
+        severity:
+          hoursUntilDeadline <= 24
+            ? "high"
+            : "medium",
+        task,
+        suggestedSlot,
+        message:
+          `"${task.title}" is due soon but isn't scheduled yet.`
+      };
+    }
+
+    return null;
+  }
+
+
+  /*
+     The task is scheduled before the deadline,
+     so there is currently no problem.
+  */
+  return null;
+}
+
+
+/**
+ * Analyze every task on the calendar.
+ */
+function getProactiveInsights() {
+  const insights = [];
+
+  tasks.forEach((task) => {
+
+    const insight =
+      analyzeTaskDeadline(task);
+
+    if (insight) {
+      insights.push(insight);
+    }
+
+  });
+
+  /*
+     Most urgent problems first.
+  */
+  insights.sort((a, b) => {
+
+    const severityScore = {
+      high: 3,
+      medium: 2,
+      low: 1
+    };
+
+    return (
+      severityScore[b.severity] -
+      severityScore[a.severity]
+    );
+  });
+
+  return insights;
+}
+
+
+/**
+ * Format a suggested time for the user.
+ */
+function formatInsightTime(dateString) {
+  if (!dateString) {
+    return "";
+  }
+
+  const date = new Date(dateString);
+
+  return date.toLocaleString(
+    undefined,
+    {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    }
+  );
+}
+
+
+/**
+ * Display the most important proactive insight.
+ */
+function renderProactiveInsight() {
+
+  let container =
+    document.getElementById(
+      "proactive-insight"
+    );
+
+
+  /*
+     Create the insight container automatically
+     if it doesn't exist in the HTML.
+  */
+  if (!container) {
+
+    container =
+      document.createElement("div");
+
+    container.id =
+      "proactive-insight";
+
+    document.body.prepend(container);
+  }
+
+
+  const insights =
+    getProactiveInsights();
+
+
+  /*
+     Nothing needs attention.
+  */
+  if (!insights.length) {
+
+    container.innerHTML = "";
+
+    container.style.display = "none";
+
+    return;
+  }
+
+
+  const insight =
+    insights[0];
+
+  const task =
+    insight.task;
+
+
+  const severityClass =
+    insight.severity === "high"
+      ? "insight-high"
+      : "insight-medium";
+
+
+  let actionHTML = "";
+
+
+  /*
+     If we found a possible time,
+     show a Schedule it button.
+  */
+  if (insight.suggestedSlot) {
+
+    const formattedTime =
+      formatInsightTime(
+        insight.suggestedSlot
+      );
+
+
+    actionHTML = `
+      <div class="insight-suggestion">
+        I found an open time:
+        <strong>${escapeHTML(formattedTime)}</strong>
+      </div>
+
+      <button
+        type="button"
+        class="insight-action"
+        data-insight-action="schedule"
+        data-task-id="${task.id}"
+      >
+        Schedule it
+      </button>
+    `;
+  }
+
+
+  container.innerHTML = `
+    <div class="insight-card ${severityClass}">
+
+      <div class="insight-content">
+
+        <div class="insight-label">
+          ${insight.severity === "high"
+            ? "Needs attention"
+            : "Plannr noticed something"}
+        </div>
+
+        <div class="insight-title">
+          ${escapeHTML(insight.message)}
+        </div>
+
+        ${actionHTML}
+
+      </div>
+
+      <button
+        type="button"
+        class="insight-dismiss"
+        data-insight-action="dismiss"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+
+    </div>
+  `;
+
+
+  container.style.display = "block";
+
+
+  /*
+     Schedule button.
+  */
+  const scheduleButton =
+    container.querySelector(
+      '[data-insight-action="schedule"]'
+    );
+
+  if (scheduleButton) {
+
+    scheduleButton.addEventListener(
+      "click",
+      () => {
+
+        const taskId =
+          scheduleButton.dataset.taskId;
+
+        scheduleInsightTask(taskId);
+      }
+    );
+  }
+
+
+  /*
+     Dismiss button.
+  */
+  const dismissButton =
+    container.querySelector(
+      '[data-insight-action="dismiss"]'
+    );
+
+  dismissButton.addEventListener(
+    "click",
+    () => {
+
+      container.style.display = "none";
+    }
+  );
+}
+
+
+/**
+ * Schedule a task using the slot discovered
+ * by the proactive insight engine.
+ */
+async function scheduleInsightTask(taskId) {
+
+  const task =
+    tasks.find(
+      (t) => t.id === taskId
+    );
+
+
+  if (!task) {
+    return;
+  }
+
+
+  const suggestedSlot =
+    findInsightSlot(task);
+
+
+  if (!suggestedSlot) {
+
+    setStatus(
+      `I couldn't find an open time for "${task.title}".`,
+      true
+    );
+
+    return;
+  }
+
+
+  /*
+     Update the EXISTING task.
+     Do not create a duplicate.
+  */
+  task.scheduledStart =
+    suggestedSlot;
+
+
+  task.status =
+    "scheduled";
+
+
+  await saveTasks();
+
+
+  /*
+     Show the week containing
+     the newly scheduled task.
+  */
+  currentWeekStart =
+    getStartOfWeek(
+      new Date(suggestedSlot)
+    );
+
+
+  setStatus(
+    `Scheduled "${task.title}" for ${new Date(
+      suggestedSlot
+    ).toLocaleString(
+      undefined,
+      {
+        weekday: "long",
+        hour: "numeric",
+        minute: "2-digit"
+      }
+    )}.`
+  );
+
+
+  renderWeekLabel();
+
+  renderCalendar();
+
+  renderProactiveInsight();
+}
+
+
+/**
+ * Run proactive analysis.
+ */
+function runProactiveInsights() {
+
+  /*
+     Small delay prevents the insight from appearing
+     before the calendar has finished rendering.
+  */
+  setTimeout(
+    () => {
+      renderProactiveInsight();
+    },
+    100
+  );
+}
+```
+
+This deliberately reuses your existing `findOpenSlot()` rather than introducing another scheduler. Your existing scheduler already checks deadlines, conflicts, preferred times, day load, spacing, etc.
 
 /* ---------- FIND EXISTING TASK ---------- */
 
