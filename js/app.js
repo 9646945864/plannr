@@ -1310,7 +1310,6 @@ function setStatus(
   );
 }
 
-```javascript
 /* ============================================================
    9.5. PROACTIVE INSIGHTS
    Looks for tasks that are at risk of missing their deadline.
