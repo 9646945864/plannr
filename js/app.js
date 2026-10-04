@@ -1449,6 +1449,53 @@ function analyzeTaskDeadline(task) {
   return null;
 }
 
+function analyzeScheduleLoad(task) {
+  if (!task || task.status === "done" || !task.scheduledStart) {
+    return null;
+  }
+
+  const start = new Date(task.scheduledStart);
+  const dayKey = start.toDateString();
+
+  const dayTasks = tasks.filter(t => {
+    if (!t.scheduledStart || t.status === "done") return false;
+
+    return new Date(t.scheduledStart).toDateString() === dayKey;
+  });
+
+  const totalMinutes = dayTasks.reduce((sum, t) => {
+    return sum + (Number(t.durationMinutes) || 0);
+  }, 0);
+
+  // Very overloaded day
+  if (totalMinutes >= 420) {
+    return {
+      type: "overloaded",
+      severity: "high",
+      task,
+      totalMinutes,
+      message: `Your ${start.toLocaleDateString([], {
+        weekday: "long"
+      })} is heavily packed with about ${Math.round(totalMinutes / 60)} hours of scheduled work.`
+    };
+  }
+
+  // Moderately busy day
+  if (totalMinutes >= 300) {
+    return {
+      type: "overloaded",
+      severity: "medium",
+      task,
+      totalMinutes,
+      message: `Your ${start.toLocaleDateString([], {
+        weekday: "long"
+      })} is getting pretty full with about ${Math.round(totalMinutes / 60)} hours scheduled.`
+    };
+  }
+
+  return null;
+}
+
 
 /**
  * Analyze every task on the calendar.
@@ -1456,64 +1503,37 @@ function analyzeTaskDeadline(task) {
 function getProactiveInsights() {
   const insights = [];
 
-  tasks.forEach((task) => {
+  // Existing deadline intelligence
+  tasks.forEach(task => {
+    const deadlineInsight = analyzeTaskDeadline(task);
 
-    const insight =
-      analyzeTaskDeadline(task);
-
-    if (insight) {
-      insights.push(insight);
+    if (deadlineInsight) {
+      insights.push(deadlineInsight);
     }
-
   });
 
-  /*
-     Most urgent problems first.
-  */
+  // NEW: Schedule optimization
+  tasks.forEach(task => {
+    const scheduleInsight = analyzeScheduleLoad(task);
+
+    if (scheduleInsight) {
+      insights.push(scheduleInsight);
+    }
+  });
+
+  const severityScore = {
+    high: 3,
+    medium: 2,
+    low: 1
+  };
+
   insights.sort((a, b) => {
-
-    const severityScore = {
-      high: 3,
-      medium: 2,
-      low: 1
-    };
-
-    return (
-      severityScore[b.severity] -
-      severityScore[a.severity]
-    );
+    return (severityScore[b.severity] || 0) -
+           (severityScore[a.severity] || 0);
   });
 
   return insights;
 }
-
-
-/**
- * Format a suggested time for the user.
- */
-function formatInsightTime(dateString) {
-  if (!dateString) {
-    return "";
-  }
-
-  const date = new Date(dateString);
-
-  return date.toLocaleString(
-    undefined,
-    {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
-    }
-  );
-}
-
-
-/**
- * Display the most important proactive insight.
- */
 function renderProactiveInsight() {
 
   let container =
@@ -1557,6 +1577,33 @@ function renderProactiveInsight() {
 
   const insight =
     insights[0];
+
+  if (insight.type === "overloaded") {
+     const card = document.createElement("div");
+     card.className = "insight-card";
+
+     card.innerHTML = `
+       <div class="insight-header">
+         <strong>Plannr noticed something</strong>
+         <button class="insight-dismiss" aria-label="Dismiss">×</button>
+       </div>
+
+       <div class="insight-message">
+         ${insight.message}
+       </div>
+
+       <div class="insight-subtext">
+         Consider moving some work to another day to keep your schedule manageable.
+       </div>
+     `;
+
+     card.querySelector(".insight-dismiss").onclick = () => {
+       container.innerHTML = "";
+     };
+
+     container.appendChild(card);
+     return;
+   }
 
   const task =
     insight.task;
