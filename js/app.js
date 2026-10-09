@@ -1820,8 +1820,6 @@ function runProactiveInsights() {
 }
 ```
 
-This deliberately reuses your existing `findOpenSlot()` rather than introducing another scheduler. Your existing scheduler already checks deadlines, conflicts, preferred times, day load, spacing, etc.
-
 /* ---------- FIND EXISTING TASK ---------- */
 
 function findTaskByTitle(
