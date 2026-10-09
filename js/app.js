@@ -2690,25 +2690,82 @@ function setupApp() {
 
   /* ---------- INITIAL RENDER ---------- */
 
-  renderWeekLabel();
-  renderCalendar();
+  
+  /* ---------- INITIAL RENDER ---------- */
+
+  loadCalendarData();
 
 }
 
+/* Load saved tasks before rendering the calendar */
+
+async function loadCalendarData() {
+  try {
+    const {
+      data: { user },
+      error: authError
+    } = await supabaseClient.auth.getUser();
+
+    if (authError || !user) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    const {
+      data: cloudTasks,
+      error: tasksError
+    } = await supabaseClient
+      .from("tasks")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("scheduled_start", {
+        ascending: true
+      });
+
+    if (tasksError) {
+      throw tasksError;
+    }
+
+    tasks = (cloudTasks || []).map((task) => ({
+      id: task.id,
+      title: task.title,
+      durationMinutes: task.duration_minutes,
+      scheduledStart: task.scheduled_start,
+      deadline: task.deadline,
+      preferredTime: task.preferred_time,
+      status: task.status,
+      type: "task"
+    }));
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(tasks)
+    );
+
+    renderWeekLabel();
+    renderCalendar();
+
+  } catch (error) {
+    console.error(
+      "Plannr calendar failed to load:",
+      error
+    );
+
+    alert(
+      "The calendar could not load. Please refresh the page and try again."
+    );
+  }
+}
 
 /* Start the app */
 
-if (
-  document.readyState === "loading"
-) {
-
+if (document.readyState === "loading") {
   document.addEventListener(
     "DOMContentLoaded",
     setupApp
   );
-
 } else {
-
   setupApp();
-
 }
+
+
