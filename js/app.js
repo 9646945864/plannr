@@ -2006,14 +2006,10 @@ function rescheduleTask(
 
 
   if (!newTime) {
+    const hours = String(oldStart.getHours()).padStart(2, "0");
+    const minutes = String(oldStart.getMinutes()).padStart(2, "0");
 
-    newTime =
-      `${String(
-        oldStart.getHours()
-      ).padStart(2, "0")}:${String(
-        oldStart.getMinutes()
-      ).padStart(2, "0")}`;
-
+    newTime = hours + ":" + minutes;
   }
 
 
