@@ -1822,23 +1822,15 @@ function runProactiveInsights() {
 
 /* ---------- FIND EXISTING TASK ---------- */
 
-function findTaskByTitle(
-  targetTitle
-) {
-
-  if (
-    !targetTitle ||
-    typeof targetTitle !== "string"
-  ) {
+function findTaskByTitle(targetTitle) {
+  if (!targetTitle || typeof targetTitle !== "string") {
     return null;
   }
 
+  const target = targetTitle.toLowerCase().trim();
 
-  const target =
-    targetTitle
-      .toLowerCase()
-      .trim();
-
+  // The rest of your existing function goes here.
+}
 
   /*
      First try exact title.
@@ -1953,185 +1945,105 @@ function findTaskByTitle(
 }
 
 
+
 /* ---------- RESCHEDULE TASK ---------- */
 
-function rescheduleTask(
-  parsed
-) {
-
-  const task =
-    findTaskByTitle(
-      parsed.targetTitle
-    );
-
+function rescheduleTask(parsed) {
+  const task = findTaskByTitle(parsed.targetTitle);
 
   if (!task) {
-
-   setStatus(
-      "Task not found on your calendar.",
-      true
-   );
-  
+    setStatus("Task not found on your calendar.", true);
     return false;
   }
 
+  const oldStart = new Date(task.scheduledStart);
 
-  const oldStart =
-    new Date(
-      task.scheduledStart
-    );
-
-
-  let newDate =
-    parsed.date;
-
-
-  let newTime =
-    parsed.time;
-
-
-  /*
-     If AI only gave a new date,
-     keep the old time.
-  */
-
-  if (!newDate) {
-
-    newDate =
-      formatDateISO(
-        oldStart
-      );
-
+  if (Number.isNaN(oldStart.getTime())) {
+    setStatus("This task has an invalid scheduled time.", true);
+    return false;
   }
 
+  // Keep the original date or time when the AI
+  // only specifies one of them.
+  let newDate = parsed.date || formatDateISO(oldStart);
+
+  let newTime = parsed.time;
 
   if (!newTime) {
     const hours = String(oldStart.getHours()).padStart(2, "0");
     const minutes = String(oldStart.getMinutes()).padStart(2, "0");
-
     newTime = hours + ":" + minutes;
   }
-  
+
+  // Build the new start and end times.
   const newStart = new Date(
-     String(newDate) + "T" + String(newTime)
-   );
-  
-  const newEnd =
-    new Date(
-      newStart.getTime() +
-      task.durationMinutes *
-      60 *
-      1000
-    );
+    String(newDate) + "T" + String(newTime)
+  );
 
-
-  /*
-     Don't allow moving a task
-     into the past.
-  */
-
-  if (
-    newStart < new Date()
-  ) {
-
-    setStatus(
-      "I can't move a task into the past.",
-      true
-    );
-
+  if (Number.isNaN(newStart.getTime())) {
+    setStatus("Please provide a valid date and time.", true);
     return false;
   }
 
+  const duration = Number(task.durationMinutes);
 
-  /*
-     Temporarily remove the task
-     from conflict checking.
+  if (!Number.isFinite(duration) || duration <= 0) {
+    setStatus("This task has an invalid duration.", true);
+    return false;
+  }
 
-     Otherwise it would collide
-     with its own old location.
-  */
-
-  const originalIndex =
-    tasks.indexOf(task);
-
-
-  tasks.splice(
-    originalIndex,
-    1
+  const newEnd = new Date(
+    newStart.getTime() + duration * 60 * 1000
   );
 
+  // Don't allow moving a task into the past.
+  if (newStart < new Date()) {
+    setStatus("I can't move a task into the past.", true);
+    return false;
+  }
 
-  const free =
-    isSlotFree(
-      newStart,
-      newEnd
-    );
+  // Temporarily remove the task so it doesn't conflict
+  // with its own original time slot.
+  const originalIndex = tasks.indexOf(task);
 
+  if (originalIndex === -1) {
+    setStatus("Could not locate the task to reschedule.", true);
+    return false;
+  }
 
-  /*
-     Put it back if there is a conflict.
-  */
+  tasks.splice(originalIndex, 1);
+
+  let free;
+
+  try {
+    free = isSlotFree(newStart, newEnd);
+  } finally {
+    // Always restore the task before continuing.
+    tasks.splice(originalIndex, 0, task);
+  }
 
   if (!free) {
-
-    tasks.splice(
-      originalIndex,
-      0,
-      task
-    );
-
-
     setStatus(
       "That time overlaps another task or event.",
       true
     );
-
     return false;
   }
 
-
-  /*
-     Update the existing task.
-
-     IMPORTANT:
-     We do NOT create a new ID.
-     This prevents duplicates.
-  */
-
-  task.scheduledStart =
-    formatLocalDateTime(
-      newStart
-    );
-
-
-  tasks.splice(
-    originalIndex,
-    0,
-    task
-  );
-
+  // Update the existing task; preserve its ID.
+  task.scheduledStart = formatLocalDateTime(newStart);
 
   saveTasks();
 
+  currentWeekStart = getStartOfWeek(newStart);
 
-  currentWeekStart =
-    getStartOfWeek(
-      newStart
-    );
+  setStatus("Task rescheduled successfully.");
 
+  renderWeekLabel();
+  renderCalendar();
 
-  setStatus(
-     "Task rescheduled successfully."
-   );
-      undefined,
-      {
-        weekday: "long",
-        hour: "numeric",
-        minute: "2-digit"
-      }
-    )}.`
-  );
-
+  return true;
+}
 
   renderWeekLabel();
 
