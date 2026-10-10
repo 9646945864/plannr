@@ -2121,7 +2121,8 @@ function rescheduleTask(
 
 
   setStatus(
-    `Moved "${task.title}" to ${newStart.toLocaleString(
+     "Task rescheduled successfully."
+   );
       undefined,
       {
         weekday: "long",
