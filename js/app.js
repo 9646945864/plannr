@@ -1820,135 +1820,117 @@ function runProactiveInsights() {
 }
 ```
 
+
 /* ---------- FIND EXISTING TASK ---------- */
 
 function findTaskByTitle(targetTitle) {
-  if (!targetTitle || typeof targetTitle !== "string") {
+  if (
+    typeof targetTitle !== "string" ||
+    !targetTitle.trim()
+  ) {
     return null;
   }
 
   const target = targetTitle.toLowerCase().trim();
 
-  // The rest of your existing function goes here.
-}
+  // Only consider scheduled tasks with valid titles.
+  const scheduledTasks = tasks.filter(
+    (task) =>
+      task &&
+      task.status === "scheduled" &&
+      typeof task.title === "string" &&
+      task.title.trim() !== ""
+  );
 
-  /*
-     First try exact title.
-  */
-
-  let match =
-    tasks.find(
-      (task) =>
-        task.status === "scheduled" &&
-        task.title
-          .toLowerCase()
-          .trim() === target
-    );
-
+  // 1. Try an exact title match.
+  let match = scheduledTasks.find(
+    (task) =>
+      task.title.toLowerCase().trim() === target
+  );
 
   if (match) {
     return match;
   }
 
+  // 2. Try a partial title match.
+  match = scheduledTasks.find((task) => {
+    const title = task.title.toLowerCase().trim();
 
-  /*
-     Then try if the target is contained
-     inside the task title.
-  */
-
-  match =
-    tasks.find(
-      (task) =>
-        task.status === "scheduled" &&
-        (
-          task.title
-            .toLowerCase()
-            .includes(target) ||
-          target.includes(
-            task.title
-              .toLowerCase()
-          )
-        )
+    return (
+      title.includes(target) ||
+      target.includes(title)
     );
-
-
-  if (match) {
-    return match;
-  }
-
-
-  /*
-     Finally, match individual words.
-     This helps with commands like:
-
-     "Move chemistry to Friday"
-
-     when the task is:
-
-     "Study for chemistry"
-  */
-
-  const words =
-    target
-      .split(/\s+/)
-      .filter(
-        (word) =>
-          word.length > 2
-      );
-
-
-  let bestMatch = null;
-
-  let bestScore = 0;
-
-
-  tasks.forEach((task) => {
-
-    if (
-      task.status !== "scheduled"
-    ) {
-      return;
-    }
-
-
-    const title =
-      task.title
-        .toLowerCase();
-
-
-    let score = 0;
-
-
-    words.forEach((word) => {
-
-      if (
-        title.includes(word)
-      ) {
-        score++;
-      }
-
-    });
-
-
-    if (score > bestScore) {
-
-      bestScore = score;
-
-      bestMatch = task;
-
-    }
-
   });
 
+  if (match) {
+    return match;
+  }
 
-  return bestMatch;
+  // 3. Match meaningful words in the title.
+  const ignoredWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "into",
+    "move",
+    "move",
+    "reschedule",
+    "schedule",
+    "delete",
+    "remove",
+    "task",
+    "event",
+    "please",
+    "my",
+    "to"
+  ]);
+
+  const words = target
+    .split(/\s+/)
+    .filter(
+      (word) =>
+        word.length > 2 &&
+        !ignoredWords.has(word)
+    );
+
+  if (words.length === 0) {
+    return null;
+  }
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  scheduledTasks.forEach((task) => {
+    const title = task.title.toLowerCase();
+    let score = 0;
+
+    words.forEach((word) => {
+      if (title.includes(word)) {
+        score++;
+      }
+    });
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = task;
+    }
+  });
+
+  // Require at least one meaningful matching word.
+  return bestScore > 0 ? bestMatch : null;
 }
-
 
 
 /* ---------- RESCHEDULE TASK ---------- */
 
 function rescheduleTask(parsed) {
+  if (!parsed || !parsed.targetTitle) {
+    setStatus("Please specify which task to reschedule.", true);
+    return false;
+  }
+
   const task = findTaskByTitle(parsed.targetTitle);
 
   if (!task) {
@@ -1963,25 +1945,60 @@ function rescheduleTask(parsed) {
     return false;
   }
 
-  // Keep the original date or time when the AI
-  // only specifies one of them.
-  let newDate = parsed.date || formatDateISO(oldStart);
+  // Keep the original date if no new date was provided.
+  const newDate = parsed.date || formatDateISO(oldStart);
 
+  // Keep the original time if no new time was provided.
   let newTime = parsed.time;
 
   if (!newTime) {
     const hours = String(oldStart.getHours()).padStart(2, "0");
     const minutes = String(oldStart.getMinutes()).padStart(2, "0");
-    newTime = hours + ":" + minutes;
+
+    newTime = `${hours}:${minutes}`;
   }
 
-  // Build the new start and end times.
+  // Validate the date and time before creating a Date.
+  if (
+    typeof newDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(newDate) ||
+    typeof newTime !== "string" ||
+    !/^\d{2}:\d{2}$/.test(newTime)
+  ) {
+    setStatus("Please provide a valid date and time.", true);
+    return false;
+  }
+
+  const [year, month, day] = newDate.split("-").map(Number);
+  const [hour, minute] = newTime.split(":").map(Number);
+
+  if (
+    month < 1 || month > 12 ||
+    day < 1 || day > 31 ||
+    hour < 0 || hour > 23 ||
+    minute < 0 || minute > 59
+  ) {
+    setStatus("Please provide a valid date and time.", true);
+    return false;
+  }
+
   const newStart = new Date(
-    String(newDate) + "T" + String(newTime)
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0,
+    0
   );
 
-  if (Number.isNaN(newStart.getTime())) {
-    setStatus("Please provide a valid date and time.", true);
+  // Reject impossible dates such as February 31.
+  if (
+    newStart.getFullYear() !== year ||
+    newStart.getMonth() !== month - 1 ||
+    newStart.getDate() !== day
+  ) {
+    setStatus("That date does not exist.", true);
     return false;
   }
 
@@ -1996,14 +2013,11 @@ function rescheduleTask(parsed) {
     newStart.getTime() + duration * 60 * 1000
   );
 
-  // Don't allow moving a task into the past.
   if (newStart < new Date()) {
     setStatus("I can't move a task into the past.", true);
     return false;
   }
 
-  // Temporarily remove the task so it doesn't conflict
-  // with its own original time slot.
   const originalIndex = tasks.indexOf(task);
 
   if (originalIndex === -1) {
@@ -2011,26 +2025,27 @@ function rescheduleTask(parsed) {
     return false;
   }
 
+  // Temporarily remove this task when checking conflicts.
   tasks.splice(originalIndex, 1);
 
   let free;
 
   try {
     free = isSlotFree(newStart, newEnd);
+  } catch (error) {
+    setStatus("Could not check that time slot. Please try again.", true);
+    return false;
   } finally {
-    // Always restore the task before continuing.
+    // Restore the task even if the availability check fails.
     tasks.splice(originalIndex, 0, task);
   }
 
   if (!free) {
-    setStatus(
-      "That time overlaps another task or event.",
-      true
-    );
+    setStatus("That time overlaps another task or event.", true);
     return false;
   }
 
-  // Update the existing task; preserve its ID.
+  // Update the existing task without changing its ID.
   task.scheduledStart = formatLocalDateTime(newStart);
 
   saveTasks();
@@ -2045,49 +2060,38 @@ function rescheduleTask(parsed) {
   return true;
 }
 
+
 /* ---------- DELETE TASK ---------- */
 
-function deleteTaskWithAI(
-  parsed
-) {
+function deleteTaskWithAI(parsed) {
+  if (!parsed || !parsed.targetTitle) {
+    setStatus("Please specify which task to delete.", true);
+    return false;
+  }
 
-  const task =
-    findTaskByTitle(
-      parsed.targetTitle
-    );
-
+  const task = findTaskByTitle(parsed.targetTitle);
 
   if (!task) {
-
     setStatus(
       `I couldn't find "${parsed.targetTitle}" on your calendar.`,
       true
     );
-
     return false;
   }
 
+  const taskTitle = task.title;
+  const taskId = task.id;
 
-  const taskTitle =
-    task.title;
-
-
-  tasks =
-    tasks.filter(
-      (t) => t.id !== task.id
-    );
-
+  // Remove only the selected task.
+  tasks = tasks.filter(
+    (item) => item.id !== taskId
+  );
 
   saveTasks();
 
-
-  setStatus(
-    `Deleted "${taskTitle}".`
-  );
-
+  setStatus(`Deleted "${taskTitle}".`);
 
   renderCalendar();
-
 
   return true;
 }
