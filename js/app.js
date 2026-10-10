@@ -1818,7 +1818,6 @@ function runProactiveInsights() {
     100
   );
 }
-```
 
 
 /* ---------- FIND EXISTING TASK ---------- */
