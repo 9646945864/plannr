@@ -2011,14 +2011,11 @@ function rescheduleTask(
 
     newTime = hours + ":" + minutes;
   }
-
-
-  const newStart =
-    new Date(
-      `${newDate}T${newTime}`
-    );
-
-
+  
+  const newStart = new Date(
+     String(newDate) + "T" + String(newTime)
+   );
+  
   const newEnd =
     new Date(
       newStart.getTime() +
