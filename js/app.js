@@ -1967,11 +1967,11 @@ function rescheduleTask(
 
   if (!task) {
 
-    setStatus(
-      `Failed to find "${parsed.targetTitle}" on your calendar.`,
+   setStatus(
+      "Task not found on your calendar.",
       true
-    );
-
+   );
+  
     return false;
   }
 
