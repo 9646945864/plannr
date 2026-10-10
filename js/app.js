@@ -2045,15 +2045,6 @@ function rescheduleTask(parsed) {
   return true;
 }
 
-  renderWeekLabel();
-
-  renderCalendar();
-
-
-  return true;
-}
-
-
 /* ---------- DELETE TASK ---------- */
 
 function deleteTaskWithAI(
