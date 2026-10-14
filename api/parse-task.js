@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   const { text } = req.body || {};
 
-  if (!text) {
+  if (typeof text !== "string" || !text.trim()) {
     return res.status(400).json({
       error: "Missing text"
     });
@@ -21,16 +21,15 @@ export default async function handler(req, res) {
     });
   }
 
+  // Use a consistent date reference for interpreting commands.
   const today = new Date().toISOString().slice(0, 10);
 
   const prompt = `
-You are the calendar parser for Plannr.
+You are the calendar parser for Plannr, an AI scheduling assistant.
 
-Today is ${today}.
+Today's date is ${today}.
 
-Return ONLY valid JSON.
-
-The JSON must have exactly these fields:
+Return ONLY one valid JSON object with exactly these fields:
 
 {
   "action": "create",
@@ -40,114 +39,70 @@ The JSON must have exactly these fields:
   "time": null,
   "deadline": null,
   "preferredTime": null,
+  "priority": "medium",
   "targetTitle": null
 }
 
-Rules:
+ACTION RULES
 
-action:
-- create = add a new task
-- reschedule = move an existing task
-- delete = remove an existing task
+Choose exactly one action:
+- "create": create a new task.
+- "reschedule": move an existing task.
+- "delete": delete an existing task.
 
-For create:
-- title = task name
-- durationMinutes = requested duration, default 60
-- date = requested scheduled date, or null
-- time = requested exact time, or null
-- deadline = requested deadline, or null
-- preferredTime = morning, afternoon, evening, or null
-- targetTitle = null
+CREATE RULES
 
-For reschedule:
-- targetTitle = name of existing task
-- date = new date, or null
-- time = new exact time, or null
+- title: concise name of the task.
+- durationMinutes: requested duration in minutes; default to 60.
+- date: explicitly requested scheduled date in YYYY-MM-DD format, or null.
+- time: explicitly requested start time in 24-hour HH:mm format, or null.
+- deadline: requested completion deadline in YYYY-MM-DD format, or null.
+- preferredTime: "morning", "afternoon", "evening", or null.
+- priority: "low", "medium", or "high".
+- targetTitle: null.
 
-For delete:
-- targetTitle = name of existing task
+PRIORITY RULES
 
-Convert times to 24-hour format.
+Use the user's explicit priority whenever provided:
+- "high": explicitly urgent, very important, top priority, or critical.
+- "low": explicitly low priority, optional, or not important.
+- "medium": normal priority or no priority specified.
 
-Examples:
-4 PM -> 16:00
-6 PM -> 18:00
-9 AM -> 09:00
-6:30 PM -> 18:30
+Do not automatically mark every task with a deadline as high priority.
+A deadline affects scheduling urgency, while priority reflects importance.
+Never invent a priority the user explicitly contradicted.
 
-Convert durations:
-2 hours -> 120
-90 minutes -> 90
+RESCHEDULE RULES
 
-Resolve relative dates such as tomorrow and weekdays using today's date.
+- targetTitle: name of the existing task to move.
+- date: newly requested scheduled date, or null if unspecified.
+- time: newly requested exact start time, or null if unspecified.
+- Keep fields required by the JSON schema; use null for irrelevant fields.
+- priority: "medium" unless the user explicitly requests a priority change.
 
-Return ONLY the JSON object.
+DELETE RULES
+
+- targetTitle: name of the existing task to delete.
+- Keep fields required by the JSON schema; use null for irrelevant fields.
+- priority: "medium".
+
+DATE AND TIME RULES
+
+- Resolve relative dates such as "tomorrow" and weekdays using today's date.
+- Convert times to 24-hour HH:mm format.
+- "4 PM" becomes "16:00"; "9 AM" becomes "09:00".
+- "6:30 PM" becomes "18:30".
+- Convert durations to minutes: "2 hours" becomes 120; "90 minutes" becomes 90.
+- Do not confuse a completion deadline with a requested start date/time.
+- If the user requests a deadline but not a start time, set deadline and leave time null.
+- If the user requests a preferred time of day rather than an exact time, use preferredTime and leave time null.
+- Do not invent a date, time, or deadline that the user did not imply.
+
+Return ONLY the JSON object. Do not include Markdown or explanations.
 
 User command:
 ${JSON.stringify(text)}
 `;
 
   try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" +
-        encodeURIComponent(apiKey),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            thinkingConfig: {
-              thinkingLevel: "minimal"
-            }
-          }
-        })
-      }
-    );
-
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      console.error("Gemini API error:", responseText);
-
-      return res.status(response.status).json({
-        error: responseText
-      });
-    }
-
-    const data = JSON.parse(responseText);
-
-    const output =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!output) {
-      console.error("No Gemini output:", data);
-
-      return res.status(500).json({
-        error: "Gemini returned no text"
-      });
-    }
-
-    const parsed = JSON.parse(output);
-
-    return res.status(200).json(parsed);
-
-  } catch (error) {
-    console.error("Parse task error:", error);
-
-    return res.status(500).json({
-      error: error.message
-    });
-  }
-}
+    const response
