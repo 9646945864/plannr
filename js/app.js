@@ -148,7 +148,7 @@ async function saveTasks() {
         scheduled_start: task.scheduledStart || null,
         deadline: task.deadline || null,
         preferred_time: task.preferredTime || null,
-        status: task.status || "scheduled"
+        status: task.status || "scheduled",
         priority: task.priority || "medium",
       }));
 
