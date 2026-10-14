@@ -715,7 +715,7 @@ function scoreTimeSlot(
 function buildDaySlotBounds(
   day,
   prefStartHour,
-  prefEndHour
+  prefEndHour,
 ) {
 
   const start = new Date(day);
