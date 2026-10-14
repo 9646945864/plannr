@@ -2153,6 +2153,35 @@ async function createTask(
 }
 
 
+/* ---------- AI TASK PARSER ---------- */
+
+async function parseTaskWithAI(rawText) {
+  const response = await fetch("/api/parse-task", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      text: rawText
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || "AI task parsing failed."
+    );
+  }
+
+  if (!data || typeof data !== "object") {
+    throw new Error("The AI returned an invalid response.");
+  }
+
+  return data;
+}
+
+
 /* ---------- 10. MAIN AI HANDLER ---------- */
 
 async function handleAddTask(
