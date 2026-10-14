@@ -149,6 +149,7 @@ async function saveTasks() {
         deadline: task.deadline || null,
         preferred_time: task.preferredTime || null,
         status: task.status || "scheduled"
+        priority: task.priority || "medium",
       }));
 
       const { error } = await supabaseClient
@@ -263,95 +264,59 @@ function preferredHourRange(preferredTime) {
 /* ---------- FIND OPEN SLOT ---------- */
 
 function findOpenSlot(task) {
-
   const now = new Date();
+
+  const durationMinutes = Number(task?.durationMinutes || 60);
+
+  if (
+    !Number.isFinite(durationMinutes) ||
+    durationMinutes <= 0 ||
+    durationMinutes > (DAY_END_HOUR - DAY_START_HOUR) * 60
+  ) {
+    return null;
+  }
+
+  const durationMs = durationMinutes * 60 * 1000;
 
   const deadline = task.deadline
     ? new Date(`${task.deadline}T23:59:59`)
     : addDays(now, 14);
 
-  const [prefStart, prefEnd] =
-    preferredHourRange(task.preferredTime);
-
-  const durationMs =
-    task.durationMinutes * 60 * 1000;
-
-  /*
-     Start searching today.
-
-     IMPORTANT:
-     We still start at midnight, but later we
-     reject any candidate that has already passed.
-  */
+  if (
+    Number.isNaN(deadline.getTime()) ||
+    deadline < now
+  ) {
+    return null;
+  }
 
   let cursorDay = new Date(now);
-
   cursorDay.setHours(0, 0, 0, 0);
 
   const candidates = [];
 
-
   while (cursorDay <= deadline) {
-
+    // Search the entire scheduling window.
+    // Preferred hours are a scoring bonus, not a restriction.
     const daySlots = buildDaySlotBounds(
       cursorDay,
-      prefStart,
-      prefEnd
+      DAY_START_HOUR,
+      DAY_END_HOUR
     );
-
 
     for (
       let slotStart = daySlots.start;
-
       slotStart + durationMs <= daySlots.end;
-
       slotStart += SLOT_MINUTES * 60 * 1000
     ) {
+      const candidateStart = new Date(slotStart);
+      const candidateEnd = new Date(slotStart + durationMs);
 
-      const candidateStart =
-        new Date(slotStart);
+      if (candidateStart < now) continue;
+      if (candidateEnd > deadline) continue;
 
-      const candidateEnd =
-        new Date(slotStart + durationMs);
-
-
-      /*
-         NEVER schedule something that has
-         already started or ended.
-
-         This fixes:
-         "It scheduled something yesterday"
-         and
-         "It scheduled something earlier today."
-      */
-
-      if (candidateStart < now) {
+      if (!isSlotFree(candidateStart, candidateEnd)) {
         continue;
       }
-
-
-      /*
-         Don't schedule after deadline.
-      */
-
-      if (candidateEnd > deadline) {
-        continue;
-      }
-
-
-      /*
-         Don't overlap another task/event.
-      */
-
-      if (
-        !isSlotFree(
-          candidateStart,
-          candidateEnd
-        )
-      ) {
-        continue;
-      }
-
 
       const score = scoreTimeSlot(
         candidateStart,
@@ -360,35 +325,29 @@ function findOpenSlot(task) {
         deadline
       );
 
-
       candidates.push({
         start: candidateStart,
-        end: candidateEnd,
         score
       });
     }
 
-
-    cursorDay = addDays(
-      cursorDay,
-      1
-    );
+    cursorDay = addDays(cursorDay, 1);
   }
-
 
   if (candidates.length === 0) {
     return null;
   }
 
+  // Break ties in favor of the earlier slot.
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
 
-  candidates.sort(
-    (a, b) => b.score - a.score
-  );
+    return a.start.getTime() - b.start.getTime();
+  });
 
-
-  return formatLocalDateTime(
-    candidates[0].start
-  );
+  return formatLocalDateTime(candidates[0].start);
 }
 
 
@@ -400,8 +359,143 @@ function scoreTimeSlot(
 ) {
   let score = 0;
 
+  const now = new Date();
   const hour = candidateStart.getHours();
   const candidateDate = formatDateISO(candidateStart);
+
+  const priority = ["low", "medium", "high"].includes(
+    String(task.priority || "").toLowerCase()
+  )
+    ? String(task.priority || "").toLowerCase()
+    : "medium";
+
+  // Higher-priority tasks are more strongly favored for earlier slots.
+  const priorityWeight = {
+    low: 0.75,
+    medium: 2,
+    high: 4
+  }[priority];
+
+  const hoursFromNow = Math.max(
+    0,
+    (candidateStart.getTime() - now.getTime()) / 3600000
+  );
+
+  // A closer deadline increases the cost of waiting.
+  const hoursUntilDeadline = (
+    deadline.getTime() - candidateEnd.getTime()
+  ) / 3600000;
+
+  let deadlineMultiplier = 1;
+
+  if (hoursUntilDeadline <= 24) {
+    deadlineMultiplier = 2.5;
+  } else if (hoursUntilDeadline <= 72) {
+    deadlineMultiplier = 1.75;
+  } else if (hoursUntilDeadline <= 168) {
+    deadlineMultiplier = 1.25;
+  }
+
+  score -= hoursFromNow * priorityWeight * deadlineMultiplier;
+
+  // Preferred time is a bonus, not a hard restriction.
+  if (
+    task.preferredTime === "morning" &&
+    hour >= 7 && hour < 12
+  ) {
+    score += 35;
+  } else if (
+    task.preferredTime === "afternoon" &&
+    hour >= 12 && hour < 17
+  ) {
+    score += 35;
+  } else if (
+    task.preferredTime === "evening" &&
+    hour >= 17 && hour < 22
+  ) {
+    score += 35;
+  }
+
+  // Avoid scheduling too close to the end of the day when possible.
+  if (hour >= 21) {
+    score -= 20;
+  }
+
+  const tasksThatDay = tasks.filter((existingTask) => {
+    if (
+      existingTask.id === task.id ||
+      existingTask.status !== "scheduled" ||
+      !existingTask.scheduledStart
+    ) {
+      return false;
+    }
+
+    const existingStart = new Date(existingTask.scheduledStart);
+
+    return (
+      !Number.isNaN(existingStart.getTime()) &&
+      formatDateISO(existingStart) === candidateDate
+    );
+  });
+
+  const existingMinutes = tasksThatDay.reduce(
+    (total, existingTask) =>
+      total + (
+        Number.isFinite(Number(existingTask.durationMinutes)) &&
+        Number(existingTask.durationMinutes) > 0
+          ? Number(existingTask.durationMinutes)
+          : 60
+      ),
+    0
+  );
+
+  const projectedMinutes =
+    existingMinutes + Number(task.durationMinutes || 60);
+
+  // Increasing penalties for days that are already too full.
+  if (projectedMinutes > 240) {
+    score -= Math.min(30, (projectedMinutes - 240) / 12);
+  }
+
+  if (projectedMinutes > 360) {
+    score -= Math.min(35, (projectedMinutes - 360) / 6);
+  }
+
+  if (projectedMinutes > 480) {
+    score -= 40;
+  }
+
+  // Penalize awkwardly tight transitions with existing commitments.
+  for (const existingTask of tasksThatDay) {
+    const existingStart = new Date(existingTask.scheduledStart);
+
+    const existingDuration =
+      Number(existingTask.durationMinutes) > 0
+        ? Number(existingTask.durationMinutes)
+        : 60;
+
+    const existingEnd = new Date(
+      existingStart.getTime() + existingDuration * 60000
+    );
+
+    const gapBefore = (
+      candidateStart.getTime() - existingEnd.getTime()
+    ) / 60000;
+
+    const gapAfter = (
+      existingStart.getTime() - candidateEnd.getTime()
+    ) / 60000;
+
+    if (
+      (gapBefore >= 0 && gapBefore < 15) ||
+      (gapAfter >= 0 && gapAfter < 15)
+    ) {
+      score -= 18;
+    }
+  }
+
+  return score;
+}
 
   /* ============================================================
      1. PREFER EARLIER TIMES
@@ -661,79 +755,58 @@ function buildDaySlotBounds(
 
 function isSlotFree(
   candidateStart,
-  candidateEnd
+  candidateEnd,
+  ignoreTaskId = null
 ) {
+  const startMs = new Date(candidateStart).getTime();
+  const endMs = new Date(candidateEnd).getTime();
 
-  return tasks.every((t) => {
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    endMs <= startMs
+  ) {
+    return false;
+  }
 
+  return tasks.every((task) => {
     if (
-      t.status !== "scheduled" ||
-      !t.scheduledStart
+      (ignoreTaskId && task.id === ignoreTaskId) ||
+      task.status !== "scheduled" ||
+      !task.scheduledStart
     ) {
       return true;
     }
 
+    const existingStartMs = new Date(
+      task.scheduledStart
+    ).getTime();
 
-    const existingStart =
-      new Date(t.scheduledStart);
-
-
-    const existingEnd =
-      new Date(
-        existingStart.getTime() +
-        t.durationMinutes * 60 * 1000
+    // Invalid existing entries cannot be reliably checked.
+    // Report them in the console so they can be corrected.
+    if (!Number.isFinite(existingStartMs)) {
+      console.warn(
+        "Plannr: Ignoring an item with an invalid start date:",
+        task
       );
+      return true;
+    }
 
+    const rawDuration = Number(task.durationMinutes);
+    const durationMinutes =
+      Number.isFinite(rawDuration) && rawDuration > 0
+        ? rawDuration
+        : 60;
 
+    const existingEndMs =
+      existingStartMs + durationMinutes * 60000;
+
+    // Adjacent events are allowed; actual overlap is not.
     return (
-      candidateEnd <= existingStart ||
-      candidateStart >= existingEnd
+      endMs <= existingStartMs ||
+      startMs >= existingEndMs
     );
   });
-}
-
-
-/* ---------- 6. GEMINI ---------- */
-
-async function parseTaskWithAI(rawText) {
-
-  const response = await fetch(
-    "/api/parse-task",
-    {
-      method: "POST",
-
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
-
-      body: JSON.stringify({
-        text: rawText
-      })
-    }
-  );
-
-
-  if (!response.ok) {
-
-    const errorData =
-      await response
-        .json()
-        .catch(() => null);
-
-
-    throw new Error(
-      errorData?.error ||
-      `Server responded with ${response.status}`
-    );
-  }
-
-
-  const data =
-    await response.json();
-
-
-  return data;
 }
 
 
@@ -1349,6 +1422,8 @@ function findInsightSlot(task) {
       task.preferredTime || null,
 
     status: "scheduled",
+
+    priority: task.priority || "medium",
 
     scheduledStart: null,
 
@@ -2019,25 +2094,11 @@ function rescheduleTask(parsed) {
 
   const originalIndex = tasks.indexOf(task);
 
-  if (originalIndex === -1) {
-    setStatus("Could not locate the task to reschedule.", true);
-    return false;
-  }
-
-  // Temporarily remove this task when checking conflicts.
-  tasks.splice(originalIndex, 1);
-
-  let free;
-
-  try {
-    free = isSlotFree(newStart, newEnd);
-  } catch (error) {
-    setStatus("Could not check that time slot. Please try again.", true);
-    return false;
-  } finally {
-    // Restore the task even if the availability check fails.
-    tasks.splice(originalIndex, 0, task);
-  }
+  const free = isSlotFree(
+  newStart,
+  newEnd,
+  task.id
+  );
 
   if (!free) {
     setStatus("That time overlaps another task or event.", true);
@@ -2205,6 +2266,8 @@ async function createTask(
 
       status: "scheduled",
 
+      priority: parsed.priority || "medium",
+
       scheduledStart: null,
 
       type: "task"
@@ -2255,6 +2318,8 @@ async function createTask(
       null,
 
     status: "scheduled",
+
+    priority: parsed.priority || "medium",
 
     scheduledStart,
 
@@ -2632,6 +2697,7 @@ async function loadCalendarData() {
       deadline: task.deadline,
       preferredTime: task.preferred_time,
       status: task.status,
+      priority: task.priority || "medium",
       type: "task"
     }));
 
