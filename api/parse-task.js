@@ -100,9 +100,41 @@ async function generateWithFallback(prompt, apiKey) {
   return last;
 }
 
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || "https://tlimbaewebfyibhxdcbk.supabase.co";
+const SUPABASE_KEY =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  "sb_publishable_Wkqp70DOPk_vDZNChqLi_g_70dmrgay";
+
+async function getUserFromRequest(req) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+
+  if (!token) return null;
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_KEY }
+    });
+
+    if (!r.ok) return null;
+
+    const user = await r.json();
+    return user?.id ? user : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const user = await getUserFromRequest(req);
+
+  if (!user) {
+    return res.status(401).json({ error: "Please sign in again." });
   }
 
   const { text, hint, today: clientToday } = req.body || {};
