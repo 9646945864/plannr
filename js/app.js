@@ -2425,7 +2425,6 @@ async function handleAddTask(event) {
       setStatus("Network error. Check your connection and try again.", true);
     } else if (err.kind === "auth") {
       setStatus("Your session expired. Please sign in again.", true);
-    }
     } else {
       setStatus("Something went wrong reading that task. Try rephrasing it.", true);
     }
