@@ -1,3 +1,111 @@
+export const config = {
+  maxDuration: 30 // seconds; raises Vercel's default function timeout
+};
+
+const MODELS = [
+  process.env.GEMINI_MODEL || "gemini-3.8-flash",
+  process.env.GEMINI_FALLBACK_MODEL || "gemini-3.7-flash",
+  process.env.GEMINI_FALLBACK_MODEL_2 || "gemini-3.5-flash-lite"
+];
+
+const RETRYABLE_STATUS = [429, 500, 503, 504];
+const ATTEMPTS_PER_MODEL = 2;
+const REQUEST_TIMEOUT_MS = 8000;
+const TOTAL_BUDGET_MS = 22000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGemini(model, prompt, apiKey) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0
+          }
+        }),
+        signal: controller.signal
+      }
+    );
+
+    const raw = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+
+    return { ok: response.ok, status: response.status, data };
+  } catch (err) {
+    // Timeout or network failure: treat as a retryable upstream problem
+    return {
+      ok: false,
+      status: err.name === "AbortError" ? 504 : 503,
+      data: null
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/*
+  Tries each model in order, retrying temporary failures with backoff.
+  Returns { ok: true, data, model } or { ok: false, status, data }.
+*/
+async function generateWithFallback(prompt, apiKey) {
+  const startedAt = Date.now();
+  let last = { ok: false, status: 503, data: null };
+
+  for (const model of MODELS) {
+    for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt++) {
+      if (Date.now() - startedAt > TOTAL_BUDGET_MS) {
+        return last;
+      }
+
+      const result = await callGemini(model, prompt, apiKey);
+
+      if (result.ok) {
+        return { ...result, model };
+      }
+
+      last = result;
+
+      console.error(
+        `Gemini ${model} attempt ${attempt} failed:`,
+        result.status,
+        JSON.stringify(result.data?.error || {})
+      );
+
+      // Model name wrong or retired: skip straight to the next model
+      if (result.status === 404) {
+        break;
+      }
+
+      // Bad request, bad key, etc.: retrying or switching models won't help
+      if (!RETRYABLE_STATUS.includes(result.status)) {
+        return result;
+      }
+
+      if (attempt < ATTEMPTS_PER_MODEL) {
+        await sleep(600 * 2 ** (attempt - 1) + Math.random() * 300);
+      }
+    }
+  }
+
+  return last;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -83,59 +191,26 @@ ${JSON.stringify(text)}
 `;
 
   try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" +
-        encodeURIComponent(apiKey),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-          }
-        })
+    const result = await generateWithFallback(prompt, apiKey);
+
+    if (!result.ok) {
+      // Temporary overload: tell the client it's retryable instead of a generic 502
+      if (RETRYABLE_STATUS.includes(result.status) || result.status === 404) {
+        return res.status(503).json({
+          error: "The AI is busy right now. Please try again shortly.",
+          retryable: true
+        });
       }
-    );
 
-    const rawResponse = await response.text();
-
-    let apiData;
-
-    try {
-      apiData = JSON.parse(rawResponse);
-    } catch {
-      console.error("Gemini returned a non-JSON response.");
       return res.status(502).json({
-        error: "Gemini returned an invalid response."
+        error: result.data?.error?.message || "Gemini API request failed."
       });
     }
 
-    if (!response.ok) {
-      console.error(
-        "Gemini API error:",
-        response.status,
-        JSON.stringify(apiData.error || {})
-      );
-
-      return res.status(502).json({
-        error:
-          apiData.error?.message ||
-          "Gemini API request failed."
-      });
-    }
-
-    const resultText =
-      apiData.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || "")
-        .join("")
-        .trim();
+    const resultText = result.data?.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || "")
+      .join("")
+      .trim();
 
     if (!resultText) {
       return res.status(502).json({
@@ -182,4 +257,3 @@ ${JSON.stringify(text)}
     });
   }
 }
-
