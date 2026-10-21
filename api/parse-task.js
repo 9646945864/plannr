@@ -184,6 +184,34 @@ Date/time rules:
 - Do not invent dates or times.
 - Use null for irrelevant or unspecified fields.
 
+Choose one action: create, reschedule, delete, complete, or replan.
+
+For complete:
+- targetTitle: existing task the user says they finished.
+
+For replan:
+- targetTitle: a specific task that was missed or needs moving, or null.
+- replanScope: "task", "today", or "week".
+- shiftMinutes: how much the user is delayed (e.g. "2 hours late" = 120), or null.
+- availableFrom: HH:mm time the user is free again today, or null.
+- Use replan for "I didn't finish X", "I'm running late", "I missed X", "redo my schedule".
+
+Return ONLY one valid JSON object with these fields:
+{
+  "action": "create",
+  "title": "",
+  "durationMinutes": 60,
+  "date": null,
+  "time": null,
+  "deadline": null,
+  "preferredTime": null,
+  "priority": "medium",
+  "targetTitle": null,
+  "replanScope": null,
+  "shiftMinutes": null,
+  "availableFrom": null
+}
+
 Return only valid JSON, without Markdown or explanations.
 
 User command:
@@ -229,7 +257,7 @@ ${JSON.stringify(text)}
       });
     }
 
-    const allowedActions = ["create", "reschedule", "delete"];
+    const allowedActions = ["create", "reschedule", "delete", "complete", "replan"];
 
     if (!allowedActions.includes(parsed.action)) {
       return res.status(502).json({
