@@ -1865,14 +1865,25 @@ async function waitBeforeRetry(attempt, onRetry) {
 async function parseTaskWithAI(rawText, onRetry) {
   const maxAttempts = 4;
 
+  const { data: { session } } = await supabaseClient.auth.getSession();
+
+  if (!session) {
+     const e = new Error("Please sign in again.");
+     e.kind = "auth";
+     throw e;
+  }
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let response;
 
     try {
       response = await fetch("/api/parse-task", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: rawText, today: formatDateISO(new Date()) })
+        headers: {
+           "Content-Type": "application/json",
+           "Authorization": `Bearer ${session.access_token}`
+         },
+         body: JSON.stringify({ text: rawText, today: formatDateISO(new Date()) })
       });
     } catch (networkErr) {
       if (attempt === maxAttempts) {
@@ -1899,6 +1910,12 @@ async function parseTaskWithAI(rawText, onRetry) {
         throw e;
       }
       return data;
+    }
+
+    if (response.status === 401) {
+      const e = new Error("Session expired.");
+      e.kind = "auth";
+      throw e;
     }
 
     const retryable = RETRYABLE_STATUS.includes(response.status);
@@ -2406,6 +2423,9 @@ async function handleAddTask(event) {
       setStatus("The AI is overloaded right now. Please try again in a minute.", true);
     } else if (err.kind === "network") {
       setStatus("Network error. Check your connection and try again.", true);
+    } else if (err.kind === "auth") {
+      setStatus("Your session expired. Please sign in again.", true);
+    }
     } else {
       setStatus("Something went wrong reading that task. Try rephrasing it.", true);
     }
