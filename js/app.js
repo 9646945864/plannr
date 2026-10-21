@@ -150,6 +150,7 @@ async function saveTasks() {
         preferred_time: task.preferredTime || null,
         status: task.status || "scheduled",
         priority: task.priority || "medium",
+        type: task.type || "task",
       }));
 
       const { error } = await supabaseClient
@@ -312,6 +313,7 @@ function findOpenSlot(task) {
       const candidateEnd = new Date(slotStart + durationMs);
 
       if (candidateStart < now) continue;
+      if (task.earliestStart && candidateStart < task.earliestStart) continue;
       if (candidateEnd > deadline) continue;
 
       if (!isSlotFree(candidateStart, candidateEnd)) {
@@ -2215,6 +2217,443 @@ async function parseTaskWithAI(rawText, onRetry) {
   }
 }
 
+/* ============================================================
+   SMART AUTO-RESCHEDULING
+   ============================================================ */
+
+const MISSED_LOOKBACK_DAYS = 7;
+
+let lastReplanUndo = null;        // [{ id, scheduledStart }]
+let missedBannerDismissed = false;
+
+
+/* ---------- BANNER CONTAINER ---------- */
+
+function getReplanContainer() {
+  let el = document.getElementById("replan-banner");
+
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "replan-banner";
+    document.body.prepend(el);
+  }
+
+  return el;
+}
+
+function clearReplanBanner() {
+  const el = document.getElementById("replan-banner");
+
+  if (el) {
+    el.innerHTML = "";
+    el.style.display = "none";
+  }
+}
+
+
+/* ---------- COMPLETE TASK (AI) ---------- */
+
+function completeTaskWithAI(parsed) {
+  if (!parsed || !parsed.targetTitle) {
+    setStatus("Please tell me which task you finished.", true);
+    return false;
+  }
+
+  const task = findTaskByTitle(parsed.targetTitle);
+
+  if (!task) {
+    setStatus(
+      `I couldn't find "${parsed.targetTitle}" on your calendar.`,
+      true
+    );
+    return false;
+  }
+
+  task.status = "done";
+
+  saveTasks();
+
+  setStatus(`Nice work! Marked "${task.title}" as done.`);
+
+  renderCalendar();
+
+  return true;
+}
+
+
+/* ---------- WHEN IS THE USER AVAILABLE AGAIN? ---------- */
+
+function computeEarliestStart(parsed) {
+  const now = new Date();
+  let earliest = new Date(now);
+
+  const shift = Number(parsed.shiftMinutes);
+
+  if (Number.isFinite(shift) && shift > 0) {
+    earliest = new Date(now.getTime() + shift * 60000);
+  }
+
+  if (
+    typeof parsed.availableFrom === "string" &&
+    /^\d{2}:\d{2}$/.test(parsed.availableFrom)
+  ) {
+    const [h, m] = parsed.availableFrom.split(":").map(Number);
+    const fromTime = new Date(now);
+
+    fromTime.setHours(h, m, 0, 0);
+
+    if (fromTime > earliest) {
+      earliest = fromTime;
+    }
+  }
+
+  return earliest;
+}
+
+
+/* ---------- WHICH TASKS NEED TO MOVE? ---------- */
+
+function getReplanCandidates(scope, targetTask, earliest) {
+  if (scope === "task") {
+    return targetTask ? [targetTask] : [];
+  }
+
+  const now = new Date();
+  const lookbackStart = addDays(now, -MISSED_LOOKBACK_DAYS);
+  const todayKey = formatDateISO(now);
+
+  return tasks.filter((task) => {
+    // Events (football practice, appointments) never move on their own
+    if (
+      task.type !== "task" ||
+      task.status !== "scheduled" ||
+      !task.scheduledStart
+    ) {
+      return false;
+    }
+
+    const start = new Date(task.scheduledStart);
+
+    if (Number.isNaN(start.getTime()) || start >= earliest) {
+      return false;
+    }
+
+    if (scope === "today") {
+      return formatDateISO(start) === todayKey;
+    }
+
+    // "week": anything unfinished from the last few days
+    return start >= lookbackStart;
+  });
+}
+
+
+/* ---------- ORDER: DEADLINE FIRST, THEN PRIORITY ---------- */
+
+function compareForReplan(a, b) {
+  const deadlineMs = (t) =>
+    t.deadline
+      ? new Date(`${t.deadline}T23:59:59`).getTime()
+      : Infinity;
+
+  const priorityRank = { high: 0, medium: 1, low: 2 };
+
+  const da = deadlineMs(a);
+  const db = deadlineMs(b);
+
+  if (da !== db) {
+    return da < db ? -1 : 1;
+  }
+
+  const pa = priorityRank[a.priority] ?? 1;
+  const pb = priorityRank[b.priority] ?? 1;
+
+  if (pa !== pb) {
+    return pa - pb;
+  }
+
+  return new Date(a.scheduledStart) - new Date(b.scheduledStart);
+}
+
+
+/* ---------- THE RE-PLANNER ---------- */
+
+function replanTasks(candidates, earliest) {
+  const ordered = [...candidates].sort(compareForReplan);
+
+  // Remember where everything was, for Undo
+  const undo = ordered.map((task) => ({
+    id: task.id,
+    scheduledStart: task.scheduledStart
+  }));
+
+  const originals = new Map(
+    undo.map((u) => [u.id, u.scheduledStart])
+  );
+
+  // Free up their old slots so they don't block each other
+  ordered.forEach((task) => {
+    task.scheduledStart = null;
+  });
+
+  const now = new Date();
+  const moved = [];
+  const failed = [];
+
+  // Place them one by one with the EXISTING scheduler.
+  // Each placement is visible to the next one.
+  ordered.forEach((task) => {
+    const slot = findOpenSlot({
+      ...task,
+      earliestStart: earliest
+    });
+
+    if (slot) {
+      task.scheduledStart = slot;
+      moved.push(task);
+      return;
+    }
+
+    // Couldn't fit it: put it back and report why
+    task.scheduledStart = originals.get(task.id);
+
+    const deadlinePassed =
+      task.deadline &&
+      new Date(`${task.deadline}T23:59:59`) < now;
+
+    failed.push({
+      task,
+      reason: deadlinePassed
+        ? "its deadline has passed"
+        : "no open time before its deadline"
+    });
+  });
+
+  return { moved, failed, undo };
+}
+
+
+/* ---------- RUN A REPLAN ---------- */
+
+async function runReplan({
+  scope,
+  targetTask = null,
+  earliest = new Date()
+}) {
+  const candidates = getReplanCandidates(
+    scope,
+    targetTask,
+    earliest
+  );
+
+  if (candidates.length === 0) {
+    setStatus("Nothing needs replanning. You're all caught up.");
+    clearReplanBanner();
+    return false;
+  }
+
+  const { moved, failed, undo } = replanTasks(candidates, earliest);
+
+  missedBannerDismissed = true;
+
+  const movedIds = new Set(moved.map((task) => task.id));
+
+  lastReplanUndo = moved.length
+    ? undo.filter((u) => movedIds.has(u.id))
+    : null;
+
+  await saveTasks();
+
+  if (moved.length) {
+    const firstStart = moved
+      .map((task) => new Date(task.scheduledStart))
+      .sort((a, b) => a - b)[0];
+
+    currentWeekStart = getStartOfWeek(firstStart);
+  }
+
+  renderWeekLabel();
+  renderCalendar();
+
+  showReplanSummary(moved, failed);
+
+  setStatus(
+    moved.length
+      ? `Replanned ${moved.length} task${moved.length === 1 ? "" : "s"}.`
+      : "I couldn't fit those tasks in.",
+    moved.length === 0
+  );
+
+  return true;
+}
+
+
+/* ---------- AI ENTRY POINT ---------- */
+
+async function replanWithAI(parsed) {
+  const earliest = computeEarliestStart(parsed);
+
+  const scope = ["task", "today", "week"].includes(parsed.replanScope)
+    ? parsed.replanScope
+    : parsed.targetTitle
+      ? "task"
+      : "today";
+
+  let targetTask = null;
+
+  if (scope === "task") {
+    targetTask = findTaskByTitle(parsed.targetTitle);
+
+    if (!targetTask) {
+      setStatus(
+        `I couldn't find "${parsed.targetTitle || "that task"}" on your calendar.`,
+        true
+      );
+      return false;
+    }
+  }
+
+  return runReplan({ scope, targetTask, earliest });
+}
+
+
+/* ---------- SUMMARY CARD WITH UNDO ---------- */
+
+function showReplanSummary(moved, failed) {
+  const container = getReplanContainer();
+
+  const formatSlot = (iso) =>
+    new Date(iso).toLocaleString(undefined, {
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+
+  const movedHTML = moved
+    .map(
+      (task) =>
+        `<li>${escapeHTML(task.title)} → <strong>${escapeHTML(
+          formatSlot(task.scheduledStart)
+        )}</strong></li>`
+    )
+    .join("");
+
+  const failedHTML = failed
+    .map(
+      (item) =>
+        `<li>${escapeHTML(item.task.title)}: couldn't fit (${escapeHTML(
+          item.reason
+        )})</li>`
+    )
+    .join("");
+
+  const headline = moved.length
+    ? `Replanned ${moved.length} task${moved.length === 1 ? "" : "s"}`
+    : "Couldn't replan";
+
+  container.innerHTML = `
+    <div class="insight-card ${failed.length ? "insight-high" : "insight-medium"}">
+      <div class="insight-content">
+        <div class="insight-label">Smart replan</div>
+        <div class="insight-title">${headline}</div>
+        ${moved.length ? `<ul>${movedHTML}</ul>` : ""}
+        ${failed.length ? `<ul>${failedHTML}</ul>` : ""}
+        ${
+          lastReplanUndo
+            ? `<button type="button" class="insight-action" data-replan-action="undo">Undo</button>`
+            : ""
+        }
+      </div>
+      <button type="button" class="insight-dismiss" data-replan-action="dismiss" aria-label="Dismiss">×</button>
+    </div>
+  `;
+
+  container.style.display = "block";
+
+  const undoBtn = container.querySelector('[data-replan-action="undo"]');
+
+  if (undoBtn) {
+    undoBtn.addEventListener("click", undoReplan);
+  }
+
+  container
+    .querySelector('[data-replan-action="dismiss"]')
+    .addEventListener("click", clearReplanBanner);
+}
+
+
+/* ---------- UNDO ---------- */
+
+async function undoReplan() {
+  if (!lastReplanUndo) {
+    return;
+  }
+
+  // Only restore the tasks the replan moved,
+  // so anything added since then is untouched.
+  lastReplanUndo.forEach((entry) => {
+    const task = tasks.find((t) => t.id === entry.id);
+
+    if (task) {
+      task.scheduledStart = entry.scheduledStart;
+    }
+  });
+
+  lastReplanUndo = null;
+
+  await saveTasks();
+
+  clearReplanBanner();
+
+  renderCalendar();
+
+  setStatus("Undid the replan.");
+}
+
+
+/* ---------- MISSED-TASK BANNER ON LOAD ---------- */
+
+function checkMissedTasks() {
+  if (missedBannerDismissed) {
+    return;
+  }
+
+  const missed = getReplanCandidates("week", null, new Date());
+
+  if (missed.length === 0) {
+    return;
+  }
+
+  const container = getReplanContainer();
+
+  container.innerHTML = `
+    <div class="insight-card insight-medium">
+      <div class="insight-content">
+        <div class="insight-label">Plannr noticed something</div>
+        <div class="insight-title">
+          ${missed.length} task${missed.length === 1 ? " was" : "s were"} missed. Replan ${missed.length === 1 ? "it" : "them"}?
+        </div>
+        <button type="button" class="insight-action" data-replan-action="replan">
+          Replan
+        </button>
+      </div>
+      <button type="button" class="insight-dismiss" data-replan-action="dismiss" aria-label="Dismiss">×</button>
+    </div>
+  `;
+
+  container.style.display = "block";
+
+  container
+    .querySelector('[data-replan-action="replan"]')
+    .addEventListener("click", () => runReplan({ scope: "week" }));
+
+  container
+    .querySelector('[data-replan-action="dismiss"]')
+    .addEventListener("click", () => {
+      missedBannerDismissed = true;
+      clearReplanBanner();
+    });
+}
 
 /* ---------- 10. MAIN AI HANDLER ---------- */
 
@@ -2245,6 +2684,10 @@ async function handleAddTask(event) {
       rescheduleTask(parsed);
     } else if (parsed.action === "delete") {
       deleteTaskWithAI(parsed);
+    } else if (parsed.action === "complete") {
+      completeTaskWithAI(parsed);
+    } else if (parsed.action === "replan") {
+      await replanWithAI(parsed);
     } else {
       const e = new Error("Unrecognized action from AI: " + parsed.action);
       e.kind = "invalid";
@@ -2481,7 +2924,7 @@ async function loadCalendarData() {
       preferredTime: task.preferred_time,
       status: task.status,
       priority: task.priority || "medium",
-      type: "task"
+      type: task.type || "task"
     }));
 
     localStorage.setItem(
@@ -2491,6 +2934,7 @@ async function loadCalendarData() {
 
     renderWeekLabel();
     renderCalendar();
+    checkMissedTasks();
 
   } catch (error) {
     console.error(
