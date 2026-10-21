@@ -1200,3 +1200,17 @@ body.landing {
 .insight-dismiss:hover {
   opacity: 1;
 }
+
+#replan-banner {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+
+.insight-card ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
