@@ -76,7 +76,14 @@ function loadTasks() {
   }
 }
 
-async function saveTasks() {
+let saveChain = Promise.resolve();
+
+function saveTasks() {
+  saveChain = saveChain.then(syncTasksNow).catch(console.error);
+  return saveChain;
+}
+
+async function syncTasksNow() {
   try {
     // Keep the local backup
     localStorage.setItem(
@@ -145,7 +152,9 @@ async function saveTasks() {
         user_id: user.id,
         title: task.title,
         duration_minutes: task.durationMinutes || 60,
-        scheduled_start: task.scheduledStart || null,
+        scheduled_start: task.scheduledStart
+          ? new Date(task.scheduledStart).toISOString()
+          : null,
         deadline: task.deadline || null,
         preferred_time: task.preferredTime || null,
         status: task.status || "scheduled",
@@ -979,6 +988,15 @@ function toggleTaskDone(taskId) {
     return;
   }
 
+  if (task.status === "done" && task.scheduledStart) {
+    const start = new Date(task.scheduledStart);
+    const end = new Date(start.getTime() + (task.durationMinutes || 60) * 60000);
+   
+    if (!isSlotFree(start, end, task.id)) {
+       setStatus("Can't undo: that time is now taken. Try replanning it.", true);
+       return;
+    }
+  }
 
   task.status =
     task.status === "done"
@@ -1177,416 +1195,91 @@ function setStatus(
    Looks for tasks that are at risk of missing their deadline.
    ============================================================ */
 
-function getTaskEnd(task) {
-  if (!task.scheduledStart) {
-    return null;
+const dismissedInsights = new Set();
+
+function insightKey(insight) {
+  if (insight.type === "overloaded") {
+    return `overloaded:${new Date(insight.task.scheduledStart).toDateString()}`;
   }
-
-  const start = new Date(task.scheduledStart);
-
-  return new Date(
-    start.getTime() +
-    (task.durationMinutes || 60) * 60 * 1000
-  );
+  return `${insight.type}:${insight.task.id}`;
 }
 
-
-/**
- * Find the next available slot for a task.
- *
- * This uses the EXISTING scheduler, so we don't create
- * a second scheduling system.
- */
-function findInsightSlot(task) {
-  return findOpenSlot({
-    title: task.title,
-
-    durationMinutes:
-      task.durationMinutes || 60,
-
-    deadline:
-      task.deadline || null,
-
-    preferredTime:
-      task.preferredTime || null,
-
-    status: "scheduled",
-
-    priority: task.priority || "medium",
-
-    scheduledStart: null,
-
-    type: "task"
+function formatInsightTime(iso) {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "long", hour: "numeric", minute: "2-digit"
   });
 }
 
-
-/**
- * Determine whether a task has enough scheduled time
- * before its deadline.
- *
- * For now, each task is treated as one block because
- * your current task model stores one scheduledStart.
- */
-function analyzeTaskDeadline(task) {
-  if (
-    task.type !== "task" ||
-    task.status === "done" ||
-    !task.deadline
-  ) {
-    return null;
-  }
-
-  const now = new Date();
-
-  const deadline = new Date(
-    `${task.deadline}T23:59:59`
-  );
-
-  const scheduledStart =
-    task.scheduledStart
-      ? new Date(task.scheduledStart)
-      : null;
-
-  const scheduledEnd =
-    scheduledStart
-      ? getTaskEnd(task)
-      : null;
-
-
-  /*
-     Already scheduled after the deadline.
-  */
-  if (
-    scheduledEnd &&
-    scheduledEnd > deadline
-  ) {
-    return {
-      type: "deadline",
-      severity: "high",
-      task,
-      message:
-        `"${task.title}" is scheduled after its deadline.`
-    };
-  }
-
-
-  /*
-     Task has no scheduled time yet.
-  */
-  if (!scheduledStart) {
-
-    const hoursUntilDeadline =
-      (
-        deadline.getTime() -
-        now.getTime()
-      ) /
-      (1000 * 60 * 60);
-
-    if (hoursUntilDeadline <= 48) {
-
-      const suggestedSlot =
-        findInsightSlot(task);
-
-      return {
-        type: "unscheduled",
-        severity:
-          hoursUntilDeadline <= 24
-            ? "high"
-            : "medium",
-        task,
-        suggestedSlot,
-        message:
-          `"${task.title}" is due soon but isn't scheduled yet.`
-      };
-    }
-
-    return null;
-  }
-
-
-  /*
-     The task is scheduled before the deadline,
-     so there is currently no problem.
-  */
-  return null;
-}
-
-function analyzeScheduleLoad(task) {
-  if (!task || task.status === "done" || !task.scheduledStart) {
-    return null;
-  }
-
-  const start = new Date(task.scheduledStart);
-  const dayKey = start.toDateString();
-
-  const dayTasks = tasks.filter(t => {
-    if (!t.scheduledStart || t.status === "done") return false;
-
-    return new Date(t.scheduledStart).toDateString() === dayKey;
-  });
-
-  const totalMinutes = dayTasks.reduce((sum, t) => {
-    return sum + (Number(t.durationMinutes) || 0);
-  }, 0);
-
-  // Very overloaded day
-  if (totalMinutes >= 420) {
-    return {
-      type: "overloaded",
-      severity: "high",
-      task,
-      totalMinutes,
-      message: `Your ${start.toLocaleDateString([], {
-        weekday: "long"
-      })} is heavily packed with about ${Math.round(totalMinutes / 60)} hours of scheduled work.`
-    };
-  }
-
-  // Moderately busy day
-  if (totalMinutes >= 300) {
-    return {
-      type: "overloaded",
-      severity: "medium",
-      task,
-      totalMinutes,
-      message: `Your ${start.toLocaleDateString([], {
-        weekday: "long"
-      })} is getting pretty full with about ${Math.round(totalMinutes / 60)} hours scheduled.`
-    };
-  }
-
-  return null;
-}
-
-
-/**
- * Analyze every task on the calendar.
- */
-function getProactiveInsights() {
-  const insights = [];
-
-  // Existing deadline intelligence
-  tasks.forEach(task => {
-    const deadlineInsight = analyzeTaskDeadline(task);
-
-    if (deadlineInsight) {
-      insights.push(deadlineInsight);
-    }
-  });
-
-  // NEW: Schedule optimization
-  tasks.forEach(task => {
-    const scheduleInsight = analyzeScheduleLoad(task);
-
-    if (scheduleInsight) {
-      insights.push(scheduleInsight);
-    }
-  });
-
-  const severityScore = {
-    high: 3,
-    medium: 2,
-    low: 1
-  };
-
-  insights.sort((a, b) => {
-    return (severityScore[b.severity] || 0) -
-           (severityScore[a.severity] || 0);
-  });
-
-  return insights;
-}
 function renderProactiveInsight() {
+  let container = document.getElementById("proactive-insight");
 
-  let container =
-    document.getElementById(
-      "proactive-insight"
-    );
-
-
-  /*
-     Create the insight container automatically
-     if it doesn't exist in the HTML.
-  */
   if (!container) {
-
-    container =
-      document.createElement("div");
-
-    container.id =
-      "proactive-insight";
-
-    document.body.prepend(container);
+    container = document.createElement("div");
+    container.id = "proactive-insight";
+    (document.querySelector("main") || document.body).prepend(container);
   }
 
+  container.innerHTML = "";
 
-  const insights =
-    getProactiveInsights();
+  const insight = getProactiveInsights().find(
+    (i) => !dismissedInsights.has(insightKey(i))
+  );
 
-
-  /*
-     Nothing needs attention.
-  */
-  if (!insights.length) {
-
-    container.innerHTML = "";
-
+  if (!insight) {
     container.style.display = "none";
-
     return;
   }
 
-
-  const insight =
-    insights[0];
-
-  if (insight.type === "overloaded") {
-     const card = document.createElement("div");
-     card.className = "insight-card";
-
-     card.innerHTML = `
-       <div class="insight-header">
-         <strong>Plannr noticed something</strong>
-         <button class="insight-dismiss" aria-label="Dismiss">×</button>
-       </div>
-
-       <div class="insight-message">
-         ${insight.message}
-       </div>
-
-       <div class="insight-subtext">
-         Consider moving some work to another day to keep your schedule manageable.
-       </div>
-     `;
-
-     card.querySelector(".insight-dismiss").onclick = () => {
-       container.innerHTML = "";
-     };
-
-     container.appendChild(card);
-     return;
-   }
-
-  const task =
-    insight.task;
-
-
+  const task = insight.task;
   const severityClass =
-    insight.severity === "high"
-      ? "insight-high"
-      : "insight-medium";
-
+    insight.severity === "high" ? "insight-high" : "insight-medium";
 
   let actionHTML = "";
 
-
-  /*
-     If we found a possible time,
-     show a Schedule it button.
-  */
-  if (insight.suggestedSlot) {
-
-    const formattedTime =
-      formatInsightTime(
-        insight.suggestedSlot
-      );
-
-
+  if (insight.type === "overloaded") {
+    actionHTML = `
+      <div class="insight-suggestion">
+        Consider moving some work to another day to keep your schedule manageable.
+      </div>`;
+  } else if (insight.suggestedSlot) {
     actionHTML = `
       <div class="insight-suggestion">
         I found an open time:
-        <strong>${escapeHTML(formattedTime)}</strong>
+        <strong>${escapeHTML(formatInsightTime(insight.suggestedSlot))}</strong>
       </div>
-
-      <button
-        type="button"
-        class="insight-action"
-        data-insight-action="schedule"
-        data-task-id="${task.id}"
-      >
+      <button type="button" class="insight-action"
+        data-insight-action="schedule" data-task-id="${task.id}">
         Schedule it
-      </button>
-    `;
+      </button>`;
   }
-
 
   container.innerHTML = `
     <div class="insight-card ${severityClass}">
-
       <div class="insight-content">
-
         <div class="insight-label">
-          ${insight.severity === "high"
-            ? "Needs attention"
-            : "Plannr noticed something"}
+          ${insight.severity === "high" ? "Needs attention" : "Plannr noticed something"}
         </div>
-
-        <div class="insight-title">
-          ${escapeHTML(insight.message)}
-        </div>
-
+        <div class="insight-title">${escapeHTML(insight.message)}</div>
         ${actionHTML}
-
       </div>
-
-      <button
-        type="button"
-        class="insight-dismiss"
-        data-insight-action="dismiss"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-
-    </div>
-  `;
-
+      <button type="button" class="insight-dismiss"
+        data-insight-action="dismiss" aria-label="Dismiss">×</button>
+    </div>`;
 
   container.style.display = "block";
 
-
-  /*
-     Schedule button.
-  */
-  const scheduleButton =
-    container.querySelector(
-      '[data-insight-action="schedule"]'
-    );
-
+  const scheduleButton = container.querySelector('[data-insight-action="schedule"]');
   if (scheduleButton) {
-
-    scheduleButton.addEventListener(
-      "click",
-      () => {
-
-        const taskId =
-          scheduleButton.dataset.taskId;
-
-        scheduleInsightTask(taskId);
-      }
+    scheduleButton.addEventListener("click", () =>
+      scheduleInsightTask(scheduleButton.dataset.taskId)
     );
   }
 
-
-  /*
-     Dismiss button.
-  */
-  const dismissButton =
-    container.querySelector(
-      '[data-insight-action="dismiss"]'
-    );
-
-  dismissButton.addEventListener(
-    "click",
-    () => {
-
-      container.style.display = "none";
-    }
-  );
+  container.querySelector('[data-insight-action="dismiss"]').addEventListener("click", () => {
+    dismissedInsights.add(insightKey(insight));
+    container.style.display = "none";
+  });
 }
-
-
 /**
  * Schedule a task using the slot discovered
  * by the proactive insight engine.
@@ -2062,11 +1755,15 @@ async function createTask(
       type: "task"
     };
 
-
+    if (parsed.date && !parsed.time) {
+      taskForScheduling.earliestStart = new Date(`${parsed.date}T00:00:00`);
+      taskForScheduling.deadline = parsed.date;
+    }
+    
     scheduledStart =
-      findOpenSlot(
-        taskForScheduling
-      );
+     findOpenSlot(
+     taskForScheduling
+    );
 
 
     if (!scheduledStart) {
@@ -2175,7 +1872,7 @@ async function parseTaskWithAI(rawText, onRetry) {
       response = await fetch("/api/parse-task", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: rawText })
+        body: JSON.stringify({ text: rawText, today: formatDateISO(new Date()) })
       });
     } catch (networkErr) {
       if (attempt === maxAttempts) {
@@ -2226,6 +1923,8 @@ const MISSED_LOOKBACK_DAYS = 7;
 let lastReplanUndo = null;        // [{ id, scheduledStart }]
 let missedBannerDismissed = false;
 
+const MISSED_DISMISS_KEY = "plannr_missed_dismissed";
+
 
 /* ---------- BANNER CONTAINER ---------- */
 
@@ -2235,7 +1934,7 @@ function getReplanContainer() {
   if (!el) {
     el = document.createElement("div");
     el.id = "replan-banner";
-    document.body.prepend(el);
+    (document.querySelector("main") || document.body).prepend(el);
   }
 
   return el;
@@ -2614,7 +2313,10 @@ async function undoReplan() {
 /* ---------- MISSED-TASK BANNER ON LOAD ---------- */
 
 function checkMissedTasks() {
-  if (missedBannerDismissed) {
+  if (
+    missedBannerDismissed ||
+    localStorage.getItem(MISSED_DISMISS_KEY) === formatDateISO(new Date())
+  ) {
     return;
   }
 
@@ -2651,6 +2353,7 @@ function checkMissedTasks() {
     .querySelector('[data-replan-action="dismiss"]')
     .addEventListener("click", () => {
       missedBannerDismissed = true;
+      localStorage.setItem(MISSED_DISMISS_KEY, formatDateISO(new Date()));
       clearReplanBanner();
     });
 }
@@ -2919,7 +2622,9 @@ async function loadCalendarData() {
       id: task.id,
       title: task.title,
       durationMinutes: task.duration_minutes,
-      scheduledStart: task.scheduled_start,
+      scheduledStart: task.scheduled_start
+        ? formatLocalDateTime(new Date(task.scheduled_start))
+        : null,
       deadline: task.deadline,
       preferredTime: task.preferred_time,
       status: task.status,
