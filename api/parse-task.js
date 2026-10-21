@@ -105,7 +105,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { text, hint } = req.body || {};
+  const { text, hint, today: clientToday } = req.body || {};
 
   if (typeof text !== "string" || !text.trim()) {
     return res.status(400).json({ error: "Missing text" });
@@ -117,7 +117,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "GEMINI_API_KEY is missing" });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today =
+    typeof clientToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(clientToday)
+      ? clientToday
+      : new Date().toISOString().slice(0, 10);
+  
+  const weekday = new Date(`${today}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long"
+  });
 
   const hintLine =
     hint === "replan"
@@ -255,6 +262,25 @@ ${JSON.stringify(text)}
     if (!["low", "medium", "high"].includes(parsed.priority)) {
       parsed.priority = "medium";
     }
+
+   const isDate = (v) =>
+     typeof v === "string" &&
+     /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+     !Number.isNaN(Date.parse(v));
+   const isTime = (v) =>
+     typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+    
+   parsed.date = isDate(parsed.date) ? parsed.date : null;
+   parsed.deadline = isDate(parsed.deadline) ? parsed.deadline : null;
+   parsed.time = isTime(parsed.time) ? parsed.time : null;
+   parsed.availableFrom = isTime(parsed.availableFrom) ? parsed.availableFrom : null;
+    
+   if (!Number.isFinite(parsed.shiftMinutes) || parsed.shiftMinutes < 0) {
+     parsed.shiftMinutes = null;
+   }
+   if (!["task", "today", "week"].includes(parsed.replanScope)) {
+     parsed.replanScope = null;
+   }
 
     return res.status(200).json(parsed);
   } catch (error) {
