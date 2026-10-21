@@ -2153,153 +2153,120 @@ async function createTask(
 }
 
 
-/* ---------- AI TASK PARSER ---------- */
+/* ---------- AI PARSING (with retry) ---------- */
 
-async function parseTaskWithAI(rawText) {
-  const response = await fetch("/api/parse-task", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      text: rawText
-    })
-  });
+const RETRYABLE_STATUS = [429, 500, 502, 503, 504];
 
-  const data = await response.json();
+async function waitBeforeRetry(attempt, onRetry) {
+  if (onRetry) onRetry(attempt);
+  const delay = 700 * 2 ** (attempt - 1) + Math.random() * 300; // ~0.7s, 1.4s, 2.8s
+  await new Promise((resolve) => setTimeout(resolve, delay));
+}
 
-  if (!response.ok) {
-    throw new Error(
-      data.error || "AI task parsing failed."
-    );
+async function parseTaskWithAI(rawText, onRetry) {
+  const maxAttempts = 4;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let response;
+
+    try {
+      response = await fetch("/api/parse-task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: rawText })
+      });
+    } catch (networkErr) {
+      if (attempt === maxAttempts) {
+        const e = new Error("Network error. Check your connection.");
+        e.kind = "network";
+        throw e;
+      }
+      await waitBeforeRetry(attempt, onRetry);
+      continue;
+    }
+
+    // A 502 from Vercel may not return JSON, so parse defensively
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (response.ok) {
+      if (!data || typeof data !== "object") {
+        const e = new Error("The AI returned an invalid response.");
+        e.kind = "invalid";
+        throw e;
+      }
+      return data;
+    }
+
+    const retryable = RETRYABLE_STATUS.includes(response.status);
+
+    if (retryable && attempt < maxAttempts) {
+      await waitBeforeRetry(attempt, onRetry);
+      continue;
+    }
+
+    const e = new Error(data?.error || "AI task parsing failed.");
+    e.kind = retryable ? "busy" : "bad_request";
+    throw e;
   }
-
-  if (!data || typeof data !== "object") {
-    throw new Error("The AI returned an invalid response.");
-  }
-
-  return data;
 }
 
 
 /* ---------- 10. MAIN AI HANDLER ---------- */
 
-async function handleAddTask(
-  event
-) {
-
+async function handleAddTask(event) {
   event.preventDefault();
 
-
-  const input =
-    document.getElementById(
-      "task-input"
-    );
-
-
-  const submitBtn =
-    document.getElementById(
-      "task-submit"
-    );
-
-
-  const rawText =
-    input.value.trim();
-
+  const input = document.getElementById("task-input");
+  const submitBtn = document.getElementById("task-submit");
+  const rawText = input.value.trim();
 
   if (!rawText) {
     return;
   }
 
-
   submitBtn.disabled = true;
-
-
-  setStatus(
-    "Reading that…"
-  );
-
+  setStatus("Reading that…");
 
   try {
-
-    const parsed =
-      await parseTaskWithAI(
-        rawText
-      );
-
-
-    console.log(
-      "AI PARSED:",
-      parsed
+    const parsed = await parseTaskWithAI(rawText, (attempt) =>
+      setStatus(`AI is busy, retrying (${attempt})…`)
     );
 
+    console.log("AI PARSED:", parsed);
 
-    /*
-       CREATE
-    */
-
-    if (
-      parsed.action === "create"
-    ) {
-
-      await createTask(
-        parsed,
-        rawText
-      );
-
+    if (parsed.action === "create") {
+      await createTask(parsed, rawText);
+    } else if (parsed.action === "reschedule") {
+      rescheduleTask(parsed);
+    } else if (parsed.action === "delete") {
+      deleteTaskWithAI(parsed);
+    } else {
+      const e = new Error("Unrecognized action from AI: " + parsed.action);
+      e.kind = "invalid";
+      throw e;
     }
 
-
-    /*
-       RESCHEDULE
-    */
-
-    else if (
-      parsed.action === "reschedule"
-    ) {
-
-      rescheduleTask(
-        parsed
-      );
-
-    }
-
-
-    /*
-       DELETE
-    */
-
-    else if (
-      parsed.action === "delete"
-    ) {
-
-      deleteTaskWithAI(
-        parsed
-      );
-
-    }
-
-
+    // Only clear the input on success, so the text is kept if something fails
     input.value = "";
-
-
   } catch (err) {
-
     console.error(err);
 
-
-    setStatus(
-      "Something went wrong reading that task. Try rephrasing it.",
-      true
-    );
-
+    if (err.kind === "busy") {
+      setStatus("The AI is overloaded right now. Please try again in a minute.", true);
+    } else if (err.kind === "network") {
+      setStatus("Network error. Check your connection and try again.", true);
+    } else {
+      setStatus("Something went wrong reading that task. Try rephrasing it.", true);
+    }
   } finally {
-
     submitBtn.disabled = false;
-
   }
 }
-
 
 /* ---------- 11. WEEK NAVIGATION ---------- */
 
