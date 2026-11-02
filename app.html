@@ -23,6 +23,7 @@
     </div>
 
     <p class="tagline">Tell it what you need to do. It finds the time.</p>
+
     <button type="button" id="signout-btn" class="signout-btn">Sign out</button>
 
   </header>
@@ -146,6 +147,70 @@
 
             <button type="submit">
               Save Event
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+
+    <!-- EDIT / DELETE TASK MODAL -->
+
+    <div id="task-modal" class="event-modal is-hidden">
+
+      <div class="event-modal-card">
+
+        <h2>Edit</h2>
+
+        <form id="edit-form">
+
+          <label for="edit-title">Name</label>
+
+          <input type="text" id="edit-title" required>
+
+
+          <label for="edit-date">Date</label>
+
+          <input type="date" id="edit-date" required>
+
+
+          <label for="edit-start">Start time</label>
+
+          <input type="time" id="edit-start" required>
+
+
+          <label for="edit-duration">Length (minutes)</label>
+
+          <input
+            type="number"
+            id="edit-duration"
+            min="15"
+            max="900"
+            step="15"
+            required
+          >
+
+
+          <div class="event-modal-actions">
+
+            <button type="button" id="edit-delete-btn" class="btn-danger">
+              Delete
+            </button>
+
+            <button type="button" id="edit-done-btn" class="btn-secondary">
+              Mark done
+            </button>
+
+            <button type="button" id="edit-cancel-btn" class="btn-secondary">
+              Cancel
+            </button>
+
+            <button type="submit">
+              Save
             </button>
 
           </div>
