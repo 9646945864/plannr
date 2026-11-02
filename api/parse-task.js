@@ -200,6 +200,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Please sign in again." });
   }
 
+  if (!user.email_confirmed_at) {
+    return res.status(403).json({ error: "Please confirm your email first." });
+  }
+
   const { text, hint, today: clientToday } = req.body || {};
 
   if (typeof text !== "string" || !text.trim()) {
