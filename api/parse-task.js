@@ -100,8 +100,11 @@ async function generateWithFallback(prompt, apiKey) {
   return last;
 }
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || "https://tlimbaewebfyibhxdcbk.supabase.co";
+const SUPABASE_URL = (
+  process.env.SUPABASE_URL || "https://tlimbaewebfyibhxdcbk.supabase.co"
+)
+  .replace(/\/rest\/v1\/?$/, "")
+  .replace(/\/+$/, "");
 const SUPABASE_KEY =
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_Wkqp70DOPk_vDZNChqLi_g_70dmrgay";
