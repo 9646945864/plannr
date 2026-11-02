@@ -2,6 +2,8 @@ export const config = {
   maxDuration: 30
 };
 
+/* ---------- GEMINI CONFIG ---------- */
+
 const MODELS = [
   process.env.GEMINI_MODEL || "gemini-3.8-flash",
   process.env.GEMINI_FALLBACK_MODEL || "gemini-3.7-flash",
@@ -9,15 +11,32 @@ const MODELS = [
 ];
 
 const RETRYABLE_STATUS = [429, 500, 503, 504];
-const ATTEMPTS_PER_MODEL = 2;
-const REQUEST_TIMEOUT_MS = 12000;
-const TOTAL_BUDGET_MS = 26000;
+const ATTEMPTS_PER_MODEL = 1;
+const REQUEST_TIMEOUT_MS = 6000;
+const TOTAL_BUDGET_MS = 9000;
+const MIN_TIME_TO_TRY_MS = 1500;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callGemini(model, prompt, apiKey) {
+async function callGemini(
+  model,
+  prompt,
+  apiKey,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  useThinkingConfig = true
+) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const generationConfig = {
+    responseMimeType: "application/json",
+    temperature: 0
+  };
+
+  // Parsing a sentence into JSON doesn't need reasoning.
+  if (useThinkingConfig) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
 
   try {
     const response = await fetch(
@@ -30,11 +49,7 @@ async function callGemini(model, prompt, apiKey) {
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0,
-            thinkingConfig: { thinkingBudget: 0 }
-          }
+          generationConfig
         }),
         signal: controller.signal
       }
@@ -62,15 +77,38 @@ async function callGemini(model, prompt, apiKey) {
 
 async function generateWithFallback(prompt, apiKey) {
   const startedAt = Date.now();
+  const timeLeft = () => TOTAL_BUDGET_MS - (Date.now() - startedAt);
+
   let last = { ok: false, status: 503, data: null };
 
   for (const model of MODELS) {
     for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt++) {
-      if (Date.now() - startedAt > TOTAL_BUDGET_MS) {
+      if (timeLeft() < MIN_TIME_TO_TRY_MS) {
         return last;
       }
 
-      const result = await callGemini(model, prompt, apiKey);
+      let result = await callGemini(
+        model,
+        prompt,
+        apiKey,
+        Math.min(REQUEST_TIMEOUT_MS, timeLeft()),
+        true
+      );
+
+      // Some models reject thinkingConfig. Retry once without it.
+      if (
+        result.status === 400 &&
+        /thinking/i.test(JSON.stringify(result.data?.error || {})) &&
+        timeLeft() >= MIN_TIME_TO_TRY_MS
+      ) {
+        result = await callGemini(
+          model,
+          prompt,
+          apiKey,
+          Math.min(REQUEST_TIMEOUT_MS, timeLeft()),
+          false
+        );
+      }
 
       if (result.ok) {
         return { ...result, model };
@@ -84,6 +122,7 @@ async function generateWithFallback(prompt, apiKey) {
         JSON.stringify(result.data?.error || {})
       );
 
+      // Model doesn't exist for this key: go to the next model.
       if (result.status === 404) {
         break;
       }
@@ -92,7 +131,7 @@ async function generateWithFallback(prompt, apiKey) {
         return result;
       }
 
-      if (attempt < ATTEMPTS_PER_MODEL) {
+      if (attempt < ATTEMPTS_PER_MODEL && timeLeft() > 2500) {
         await sleep(600 * 2 ** (attempt - 1) + Math.random() * 300);
       }
     }
@@ -101,11 +140,14 @@ async function generateWithFallback(prompt, apiKey) {
   return last;
 }
 
+/* ---------- SUPABASE AUTH ---------- */
+
 const SUPABASE_URL = (
   process.env.SUPABASE_URL || "https://tlimbaewebfyibhxdcbk.supabase.co"
 )
   .replace(/\/rest\/v1\/?$/, "")
   .replace(/\/+$/, "");
+
 const SUPABASE_KEY =
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_Wkqp70DOPk_vDZNChqLi_g_70dmrgay";
@@ -118,8 +160,6 @@ async function getUserFromRequest(req) {
     console.error("Auth: no bearer token on request");
     return null;
   }
-
-  console.log("Auth: checking token against", SUPABASE_URL);
 
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -138,6 +178,18 @@ async function getUserFromRequest(req) {
     return null;
   }
 }
+
+/* ---------- OUTPUT VALIDATION HELPERS ---------- */
+
+const isDate = (v) =>
+  typeof v === "string" &&
+  /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+  !Number.isNaN(Date.parse(v));
+
+const isTime = (v) =>
+  typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+
+/* ---------- HANDLER ---------- */
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -162,11 +214,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "GEMINI_API_KEY is missing" });
   }
 
+  // Prefer the user's local date so "tomorrow" and "Thursday" resolve correctly.
   const today =
-    typeof clientToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(clientToday)
+    typeof clientToday === "string" && isDate(clientToday)
       ? clientToday
       : new Date().toISOString().slice(0, 10);
-  
+
   const weekday = new Date(`${today}T12:00:00`).toLocaleDateString("en-US", {
     weekday: "long"
   });
@@ -178,7 +231,7 @@ export default async function handler(req, res) {
 
   const prompt = `
 You are the calendar parser for Plannr, an AI scheduling assistant.
-Today's date is ${today}.
+Today's date is ${today} (${weekday}).
 
 Return ONLY one valid JSON object with these fields:
 {
@@ -282,7 +335,9 @@ ${JSON.stringify(text)}
       .trim();
 
     if (!resultText) {
-      return res.status(502).json({ error: "Gemini returned an empty response." });
+      return res
+        .status(502)
+        .json({ error: "Gemini returned an empty response." });
     }
 
     let parsed;
@@ -291,16 +346,29 @@ ${JSON.stringify(text)}
       parsed = JSON.parse(resultText);
     } catch {
       console.error("Gemini output was not valid JSON.");
-      return res.status(502).json({ error: "Gemini returned invalid task data." });
+      return res
+        .status(502)
+        .json({ error: "Gemini returned invalid task data." });
     }
 
-    const allowedActions = ["create", "reschedule", "delete", "complete", "replan"];
+    const allowedActions = [
+      "create",
+      "reschedule",
+      "delete",
+      "complete",
+      "replan"
+    ];
 
-    if (!allowedActions.includes(parsed.action)) {
-      return res.status(502).json({ error: "Gemini returned an unsupported action." });
+    if (!parsed || !allowedActions.includes(parsed.action)) {
+      return res
+        .status(502)
+        .json({ error: "Gemini returned an unsupported action." });
     }
 
-    if (!Number.isFinite(parsed.durationMinutes) || parsed.durationMinutes <= 0) {
+    if (
+      !Number.isFinite(parsed.durationMinutes) ||
+      parsed.durationMinutes <= 0
+    ) {
       parsed.durationMinutes = 60;
     }
 
@@ -308,24 +376,30 @@ ${JSON.stringify(text)}
       parsed.priority = "medium";
     }
 
-   const isDate = (v) =>
-     typeof v === "string" &&
-     /^\d{4}-\d{2}-\d{2}$/.test(v) &&
-     !Number.isNaN(Date.parse(v));
-   const isTime = (v) =>
-     typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
-    
-   parsed.date = isDate(parsed.date) ? parsed.date : null;
-   parsed.deadline = isDate(parsed.deadline) ? parsed.deadline : null;
-   parsed.time = isTime(parsed.time) ? parsed.time : null;
-   parsed.availableFrom = isTime(parsed.availableFrom) ? parsed.availableFrom : null;
-    
-   if (!Number.isFinite(parsed.shiftMinutes) || parsed.shiftMinutes < 0) {
-     parsed.shiftMinutes = null;
-   }
-   if (!["task", "today", "week"].includes(parsed.replanScope)) {
-     parsed.replanScope = null;
-   }
+    if (!["morning", "afternoon", "evening"].includes(parsed.preferredTime)) {
+      parsed.preferredTime = null;
+    }
+
+    parsed.title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+    parsed.targetTitle =
+      typeof parsed.targetTitle === "string" && parsed.targetTitle.trim()
+        ? parsed.targetTitle.trim()
+        : null;
+
+    parsed.date = isDate(parsed.date) ? parsed.date : null;
+    parsed.deadline = isDate(parsed.deadline) ? parsed.deadline : null;
+    parsed.time = isTime(parsed.time) ? parsed.time : null;
+    parsed.availableFrom = isTime(parsed.availableFrom)
+      ? parsed.availableFrom
+      : null;
+
+    if (!Number.isFinite(parsed.shiftMinutes) || parsed.shiftMinutes < 0) {
+      parsed.shiftMinutes = null;
+    }
+
+    if (!["task", "today", "week"].includes(parsed.replanScope)) {
+      parsed.replanScope = null;
+    }
 
     return res.status(200).json(parsed);
   } catch (error) {
