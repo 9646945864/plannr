@@ -1985,7 +1985,7 @@ async function createTask(
 
 /* ---------- AI PARSING (with retry) ---------- */
 
-const RETRYABLE_STATUS = [429, 500, 502, 503, 504];
+const RETRYABLE_STATUS = [429, 503, 504];
 
 async function waitBeforeRetry(attempt, onRetry) {
   if (onRetry) onRetry(attempt);
