@@ -2595,6 +2595,22 @@ function handleNextWeek() {
   renderCalendar();
 }
 
+async function handleSignOut() {
+  const btn = document.getElementById("signout-btn");
+  if (btn) btn.disabled = true;
+
+  try {
+    await supabaseClient.auth.signOut();
+  } catch (err) {
+    console.error("Sign out failed:", err);
+  }
+
+  // Clear cached tasks so the next person on this browser can't see them
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem("plannr_missed_dismissed");
+
+  window.location.href = "index.html";
+}
 
 /* ---------- 12. INITIALIZATION ---------- */
 
@@ -2729,10 +2745,12 @@ function setupApp() {
 
   }
 
+   const signOutBtn = document.getElementById("signout-btn");
 
-  /* ---------- INITIAL RENDER ---------- */
+   if (signOutBtn) {
+     signOutBtn.addEventListener("click", handleSignOut);
+   }
 
-  
   /* ---------- INITIAL RENDER ---------- */
 
   loadCalendarData();
