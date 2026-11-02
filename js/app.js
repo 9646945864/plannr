@@ -1994,7 +1994,7 @@ async function waitBeforeRetry(attempt, onRetry) {
 }
 
 async function parseTaskWithAI(rawText, onRetry) {
-  const maxAttempts = 4;
+  const maxAttempts = 2;
 
   const { data: { session } } = await supabaseClient.auth.getSession();
 
