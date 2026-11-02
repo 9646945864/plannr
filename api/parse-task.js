@@ -110,18 +110,25 @@ async function getUserFromRequest(req) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
-  if (!token) return null;
+  if (!token) {
+    console.error("Auth: no bearer token on request");
+    return null;
+  }
 
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_KEY }
     });
 
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.error("Auth: Supabase rejected token:", r.status, await r.text());
+      return null;
+    }
 
     const user = await r.json();
     return user?.id ? user : null;
-  } catch {
+  } catch (err) {
+    console.error("Auth: request to Supabase failed:", err);
     return null;
   }
 }
