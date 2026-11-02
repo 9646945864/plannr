@@ -1247,3 +1247,24 @@ body.landing {
 .password-toggle:hover {
   color: var(--text);
 }
+
+.resend-btn {
+  margin-top: 6px;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.resend-btn:hover {
+  color: var(--text);
+}
+
+.resend-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
