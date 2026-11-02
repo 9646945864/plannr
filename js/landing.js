@@ -51,7 +51,11 @@ function setupSignIn() {
         });
 
       if (error) {
-        alert(error.message);
+        if (/confirm/i.test(error.message)) {
+          alert("Please confirm your email first. Check your inbox (and spam) for the link.");
+        } else {
+          alert(error.message);
+        }
         return;
       }
 
@@ -93,14 +97,21 @@ function setupSignIn() {
       try {
 
         const { data, error } =
-          await supabaseClient.auth.signUp({
-            email,
-            password
-          });
+           await supabaseClient.auth.signUp({
+             email,
+             password,
+             options: {
+               emailRedirectTo: `${window.location.origin}/app.html`
+             }
+           });
 
         if (error) {
-          alert(error.message);
-          return;
+           if (/confirm/i.test(error.message)) {
+             alert("Please confirm your email first. Check your inbox (and spam) for the link.");
+           } else {
+             alert(error.message);
+           }
+           return;
         }
 
         if (data.session) {
@@ -135,6 +146,15 @@ function setupSignIn() {
   }
 }
 
+async function resendConfirmation(email) {
+  const { error } = await supabaseClient.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${window.location.origin}/app.html` }
+  });
+
+  alert(error ? error.message : "Confirmation email sent.");
+}
 
 /* Start authentication */
 setupSignIn();
@@ -159,6 +179,26 @@ function setupPasswordToggle() {
 
 setupPasswordToggle();
 
+const resendBtn = document.getElementById("resend-btn");
+
+if (resendBtn) {
+  resendBtn.addEventListener("click", async () => {
+    const email = document.getElementById("signin-email").value.trim();
+
+    if (!email) {
+      alert("Enter your email above first.");
+      return;
+    }
+
+    resendBtn.disabled = true;
+    await resendConfirmation(email);
+
+    // Brief cooldown so people don't spam the button
+    setTimeout(() => {
+      resendBtn.disabled = false;
+    }, 30000);
+  });
+}
 
 /* ============================================================
    HOMEPAGE DEMO ANIMATION
