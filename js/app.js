@@ -1195,6 +1195,115 @@ function setStatus(
    Looks for tasks that are at risk of missing their deadline.
    ============================================================ */
 
+function getTaskEnd(task) {
+  if (!task.scheduledStart) return null;
+
+  const start = new Date(task.scheduledStart);
+
+  return new Date(
+    start.getTime() + (task.durationMinutes || 60) * 60 * 1000
+  );
+}
+
+function findInsightSlot(task) {
+  return findOpenSlot({
+    title: task.title,
+    durationMinutes: task.durationMinutes || 60,
+    deadline: task.deadline || null,
+    preferredTime: task.preferredTime || null,
+    status: "scheduled",
+    priority: task.priority || "medium",
+    scheduledStart: null,
+    type: "task"
+  });
+}
+
+function analyzeTaskDeadline(task) {
+  if (task.type !== "task" || task.status === "done" || !task.deadline) {
+    return null;
+  }
+
+  const now = new Date();
+  const deadline = new Date(`${task.deadline}T23:59:59`);
+
+  const scheduledStart = task.scheduledStart
+    ? new Date(task.scheduledStart)
+    : null;
+
+  const scheduledEnd = scheduledStart ? getTaskEnd(task) : null;
+
+  // Already scheduled after the deadline
+  if (scheduledEnd && scheduledEnd > deadline) {
+    return {
+      type: "deadline",
+      severity: "high",
+      task,
+      message: `"${task.title}" is scheduled after its deadline.`
+    };
+  }
+
+  // Not scheduled yet
+  if (!scheduledStart) {
+    const hoursUntilDeadline =
+      (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursUntilDeadline <= 48) {
+      return {
+        type: "unscheduled",
+        severity: hoursUntilDeadline <= 24 ? "high" : "medium",
+        task,
+        suggestedSlot: findInsightSlot(task),
+        message: `"${task.title}" is due soon but isn't scheduled yet.`
+      };
+    }
+  }
+
+  return null;
+}
+
+function analyzeScheduleLoad(task) {
+  if (!task || task.status === "done" || !task.scheduledStart) {
+    return null;
+  }
+
+  const start = new Date(task.scheduledStart);
+  const dayKey = start.toDateString();
+
+  const totalMinutes = tasks
+    .filter(
+      (t) =>
+        t.scheduledStart &&
+        t.status !== "done" &&
+        new Date(t.scheduledStart).toDateString() === dayKey
+    )
+    .reduce((sum, t) => sum + (Number(t.durationMinutes) || 0), 0);
+
+  const weekday = start.toLocaleDateString([], { weekday: "long" });
+  const hours = Math.round(totalMinutes / 60);
+
+  if (totalMinutes >= 420) {
+    return {
+      type: "overloaded",
+      severity: "high",
+      task,
+      totalMinutes,
+      message: `Your ${weekday} is heavily packed with about ${hours} hours of scheduled work.`
+    };
+  }
+
+  if (totalMinutes >= 300) {
+    return {
+      type: "overloaded",
+      severity: "medium",
+      task,
+      totalMinutes,
+      message: `Your ${weekday} is getting pretty full with about ${hours} hours scheduled.`
+    };
+  }
+
+  return null;
+}
+
 const dismissedInsights = new Set();
 
 function getProactiveInsights() {
