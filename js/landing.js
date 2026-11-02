@@ -139,6 +139,26 @@ function setupSignIn() {
 /* Start authentication */
 setupSignIn();
 
+function setupPasswordToggle() {
+  const input = document.getElementById("signin-password");
+  const toggle = document.getElementById("toggle-password");
+
+  if (!input || !toggle) return;
+
+  toggle.addEventListener("click", () => {
+    const show = input.type === "password";
+
+    input.type = show ? "text" : "password";
+    toggle.textContent = show ? "Hide" : "Show";
+    toggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    toggle.setAttribute("aria-pressed", String(show));
+
+    input.focus();
+  });
+}
+
+setupPasswordToggle();
+
 
 /* ============================================================
    HOMEPAGE DEMO ANIMATION
