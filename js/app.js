@@ -1197,6 +1197,28 @@ function setStatus(
 
 const dismissedInsights = new Set();
 
+function getProactiveInsights() {
+  const insights = [];
+
+  tasks.forEach((task) => {
+    const deadlineInsight = analyzeTaskDeadline(task);
+    if (deadlineInsight) insights.push(deadlineInsight);
+  });
+
+  tasks.forEach((task) => {
+    const scheduleInsight = analyzeScheduleLoad(task);
+    if (scheduleInsight) insights.push(scheduleInsight);
+  });
+
+  const severityScore = { high: 3, medium: 2, low: 1 };
+
+  insights.sort(
+    (a, b) => (severityScore[b.severity] || 0) - (severityScore[a.severity] || 0)
+  );
+
+  return insights;
+}
+
 function insightKey(insight) {
   if (insight.type === "overloaded") {
     return `overloaded:${new Date(insight.task.scheduledStart).toDateString()}`;
