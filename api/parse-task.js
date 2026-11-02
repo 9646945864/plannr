@@ -96,11 +96,8 @@ async function generateWithFallback(prompt, apiKey) {
       );
 
       // Some models reject thinkingConfig. Retry once without it.
-      if (
-        result.status === 400 &&
-        /thinking/i.test(JSON.stringify(result.data?.error || {})) &&
-        timeLeft() >= MIN_TIME_TO_TRY_MS
-      ) {
+
+      if (result.status === 400 && timeLeft() >= MIN_TIME_TO_TRY_MS) {
         result = await callGemini(
           model,
           prompt,
