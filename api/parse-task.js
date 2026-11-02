@@ -108,6 +108,7 @@ async function generateWithFallback(prompt, apiKey) {
       }
 
       if (result.ok) {
+        console.log(`Gemini ${model} succeeded in ${Date.now() - startedAt}ms`);
         return { ...result, model };
       }
 
