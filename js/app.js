@@ -3,13 +3,13 @@
 
    Handles:
    - Calendar rendering
-   - AI task creation
-   - AI task rescheduling
-   - AI task deletion
+   - AI task creation / rescheduling / deletion / completion
+   - Smart auto-rescheduling (replan) with undo
+   - Proactive insights
    - Manual events
-   - Task completion
-   - Local browser storage
-
+   - Edit / delete popup for calendar items
+   - Sign out
+   - Local browser storage + Supabase sync
    ============================================================ */
 
 
@@ -28,32 +28,18 @@ const DAY_END_HOUR = 22;
 const SLOT_MINUTES = 30;
 
 const STORAGE_KEY = "plannr_tasks_v1";
+const MISSED_DISMISS_KEY = "plannr_missed_dismissed";
 
 
 /* ---------- 2. TASK DATA ----------
 
    Task:
    {
-     id: "t_123",
-     title: "Study for chemistry",
-     durationMinutes: 120,
-     deadline: "2026-09-25",
-     preferredTime: "evening",
-     status: "scheduled",
-     scheduledStart: "2026-09-25T18:00:00",
-     type: "task"
-   }
-
-   Event:
-   {
-     id: "e_123",
-     title: "Football practice",
-     durationMinutes: 60,
-     deadline: null,
-     preferredTime: null,
-     status: "scheduled",
-     scheduledStart: "2026-09-25T17:00:00",
-     type: "event"
+     id, title, durationMinutes, deadline ("YYYY-MM-DD" | null),
+     preferredTime ("morning" | "afternoon" | "evening" | null),
+     status ("scheduled" | "done"), priority ("low" | "medium" | "high"),
+     scheduledStart ("YYYY-MM-DDTHH:mm:00" local | null),
+     type ("task" | "event")
    }
 
 ------------------------------------------------- */
@@ -76,6 +62,7 @@ function loadTasks() {
   }
 }
 
+// Saves run one at a time so rapid actions can't interleave.
 let saveChain = Promise.resolve();
 
 function saveTasks() {
@@ -86,12 +73,8 @@ function saveTasks() {
 async function syncTasksNow() {
   try {
     // Keep the local backup
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(tasks)
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 
-    // Get the signed-in user
     const {
       data: { user },
       error: userError
@@ -102,45 +85,33 @@ async function syncTasksNow() {
       return;
     }
 
-    // Get the tasks currently stored for this user
-    const { data: existingTasks, error: fetchError } =
-      await supabaseClient
-        .from("tasks")
-        .select("id")
-        .eq("user_id", user.id);
+    // Tasks currently stored for this user
+    const { data: existingTasks, error: fetchError } = await supabaseClient
+      .from("tasks")
+      .select("id")
+      .eq("user_id", user.id);
 
     if (fetchError) {
-      console.error(
-        "Could not check existing Supabase tasks:",
-        fetchError
-      );
+      console.error("Could not check existing Supabase tasks:", fetchError);
       return;
     }
 
-    // Find tasks that were deleted from Plannr
-    const currentIds = new Set(
-      tasks.map((task) => task.id)
-    );
+    // Tasks that were deleted in Plannr
+    const currentIds = new Set(tasks.map((task) => task.id));
 
-    const deletedIds =
-      (existingTasks || [])
-        .filter((task) => !currentIds.has(task.id))
-        .map((task) => task.id);
+    const deletedIds = (existingTasks || [])
+      .filter((task) => !currentIds.has(task.id))
+      .map((task) => task.id);
 
-    // Delete them from Supabase
     if (deletedIds.length > 0) {
-      const { error: deleteError } =
-        await supabaseClient
-          .from("tasks")
-          .delete()
-          .eq("user_id", user.id)
-          .in("id", deletedIds);
+      const { error: deleteError } = await supabaseClient
+        .from("tasks")
+        .delete()
+        .eq("user_id", user.id)
+        .in("id", deletedIds);
 
       if (deleteError) {
-        console.error(
-          "Could not delete tasks from Supabase:",
-          deleteError
-        );
+        console.error("Could not delete tasks from Supabase:", deleteError);
         return;
       }
     }
@@ -159,31 +130,23 @@ async function syncTasksNow() {
         preferred_time: task.preferredTime || null,
         status: task.status || "scheduled",
         priority: task.priority || "medium",
-        type: task.type || "task",
+        type: task.type || "task"
       }));
 
-      const { error } = await supabaseClient
-        .from("tasks")
-        .upsert(rows);
+      const { error } = await supabaseClient.from("tasks").upsert(rows);
 
       if (error) {
-        console.error(
-          "Could not save tasks to Supabase:",
-          error
-        );
+        console.error("Could not save tasks to Supabase:", error);
         return;
       }
     }
 
     console.log("Tasks synced with Supabase.");
-
   } catch (err) {
-    console.error(
-      "Could not sync tasks:",
-      err
-    );
+    console.error("Could not sync tasks:", err);
   }
 }
+
 
 /* ---------- 4. DATE HELPERS ---------- */
 
@@ -199,7 +162,6 @@ function getStartOfWeek(date) {
   return d;
 }
 
-
 function addDays(date, n) {
   const d = new Date(date);
 
@@ -208,68 +170,35 @@ function addDays(date, n) {
   return d;
 }
 
-
 function formatDateISO(date) {
   const y = date.getFullYear();
-
   const m = String(date.getMonth() + 1).padStart(2, "0");
-
   const d = String(date.getDate()).padStart(2, "0");
 
   return `${y}-${m}-${d}`;
 }
 
-
-function formatLocalDateTime(date) {
-  const y = date.getFullYear();
-
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-
-  const d = String(date.getDate()).padStart(2, "0");
-
+function formatTimeInput(date) {
   const h = String(date.getHours()).padStart(2, "0");
-
   const min = String(date.getMinutes()).padStart(2, "0");
 
-  return `${y}-${m}-${d}T${h}:${min}:00`;
+  return `${h}:${min}`;
 }
 
+function formatLocalDateTime(date) {
+  return `${formatDateISO(date)}T${formatTimeInput(date)}:00`;
+}
 
 function formatWeekLabel(weekStart) {
   const weekEnd = addDays(weekStart, 6);
 
-  const opts = {
-    month: "short",
-    day: "numeric"
-  };
+  const opts = { month: "short", day: "numeric" };
 
   return `${weekStart.toLocaleDateString(undefined, opts)} – ${weekEnd.toLocaleDateString(undefined, opts)}`;
 }
 
 
 /* ---------- 5. SCHEDULING ---------- */
-
-function preferredHourRange(preferredTime) {
-
-  switch (preferredTime) {
-
-    case "morning":
-      return [7, 12];
-
-    case "afternoon":
-      return [12, 17];
-
-    case "evening":
-      return [17, 22];
-
-    default:
-      return [
-        DAY_START_HOUR,
-        DAY_END_HOUR
-      ];
-  }
-}
-
 
 /* ---------- FIND OPEN SLOT ---------- */
 
@@ -292,10 +221,7 @@ function findOpenSlot(task) {
     ? new Date(`${task.deadline}T23:59:59`)
     : addDays(now, 14);
 
-  if (
-    Number.isNaN(deadline.getTime()) ||
-    deadline < now
-  ) {
+  if (Number.isNaN(deadline.getTime()) || deadline < now) {
     return null;
   }
 
@@ -305,7 +231,7 @@ function findOpenSlot(task) {
   const candidates = [];
 
   while (cursorDay <= deadline) {
-    // Search the entire scheduling window.
+    // Search the whole scheduling window.
     // Preferred hours are a scoring bonus, not a restriction.
     const daySlots = buildDaySlotBounds(
       cursorDay,
@@ -329,16 +255,9 @@ function findOpenSlot(task) {
         continue;
       }
 
-      const score = scoreTimeSlot(
-        candidateStart,
-        candidateEnd,
-        task,
-        deadline
-      );
-
       candidates.push({
         start: candidateStart,
-        score
+        score: scoreTimeSlot(candidateStart, candidateEnd, task, deadline)
       });
     }
 
@@ -349,7 +268,7 @@ function findOpenSlot(task) {
     return null;
   }
 
-  // Break ties in favor of the earlier slot.
+  // Highest score wins; ties go to the earlier slot.
   candidates.sort((a, b) => {
     if (b.score !== a.score) {
       return b.score - a.score;
@@ -362,12 +281,7 @@ function findOpenSlot(task) {
 }
 
 
-function scoreTimeSlot(
-  candidateStart,
-  candidateEnd,
-  task,
-  deadline
-) {
+function scoreTimeSlot(candidateStart, candidateEnd, task, deadline) {
   let score = 0;
 
   const now = new Date();
@@ -381,11 +295,7 @@ function scoreTimeSlot(
     : "medium";
 
   // Higher-priority tasks are more strongly favored for earlier slots.
-  const priorityWeight = {
-    low: 0.75,
-    medium: 2,
-    high: 4
-  }[priority];
+  const priorityWeight = { low: 0.75, medium: 2, high: 4 }[priority];
 
   const hoursFromNow = Math.max(
     0,
@@ -393,9 +303,8 @@ function scoreTimeSlot(
   );
 
   // A closer deadline increases the cost of waiting.
-  const hoursUntilDeadline = (
-    deadline.getTime() - candidateEnd.getTime()
-  ) / 3600000;
+  const hoursUntilDeadline =
+    (deadline.getTime() - candidateEnd.getTime()) / 3600000;
 
   let deadlineMultiplier = 1;
 
@@ -410,24 +319,15 @@ function scoreTimeSlot(
   score -= hoursFromNow * priorityWeight * deadlineMultiplier;
 
   // Preferred time is a bonus, not a hard restriction.
-  if (
-    task.preferredTime === "morning" &&
-    hour >= 7 && hour < 12
-  ) {
+  if (task.preferredTime === "morning" && hour >= 7 && hour < 12) {
     score += 35;
-  } else if (
-    task.preferredTime === "afternoon" &&
-    hour >= 12 && hour < 17
-  ) {
+  } else if (task.preferredTime === "afternoon" && hour >= 12 && hour < 17) {
     score += 35;
-  } else if (
-    task.preferredTime === "evening" &&
-    hour >= 17 && hour < 22
-  ) {
+  } else if (task.preferredTime === "evening" && hour >= 17 && hour < 22) {
     score += 35;
   }
 
-  // Avoid scheduling too close to the end of the day when possible.
+  // Avoid the very end of the day when possible.
   if (hour >= 21) {
     score -= 20;
   }
@@ -451,17 +351,15 @@ function scoreTimeSlot(
 
   const existingMinutes = tasksThatDay.reduce(
     (total, existingTask) =>
-      total + (
-        Number.isFinite(Number(existingTask.durationMinutes)) &&
-        Number(existingTask.durationMinutes) > 0
-          ? Number(existingTask.durationMinutes)
-          : 60
-      ),
+      total +
+      (Number.isFinite(Number(existingTask.durationMinutes)) &&
+      Number(existingTask.durationMinutes) > 0
+        ? Number(existingTask.durationMinutes)
+        : 60),
     0
   );
 
-  const projectedMinutes =
-    existingMinutes + Number(task.durationMinutes || 60);
+  const projectedMinutes = existingMinutes + Number(task.durationMinutes || 60);
 
   // Increasing penalties for days that are already too full.
   if (projectedMinutes > 240) {
@@ -489,13 +387,11 @@ function scoreTimeSlot(
       existingStart.getTime() + existingDuration * 60000
     );
 
-    const gapBefore = (
-      candidateStart.getTime() - existingEnd.getTime()
-    ) / 60000;
+    const gapBefore =
+      (candidateStart.getTime() - existingEnd.getTime()) / 60000;
 
-    const gapAfter = (
-      existingStart.getTime() - candidateEnd.getTime()
-    ) / 60000;
+    const gapAfter =
+      (existingStart.getTime() - candidateEnd.getTime()) / 60000;
 
     if (
       (gapBefore >= 0 && gapBefore < 15) ||
@@ -508,39 +404,17 @@ function scoreTimeSlot(
   return score;
 }
 
+
 /* ---------- DAY SLOT BOUNDS ---------- */
 
-function buildDaySlotBounds(
-  day,
-  prefStartHour,
-  prefEndHour
-) {
-
+function buildDaySlotBounds(day, prefStartHour, prefEndHour) {
   const start = new Date(day);
 
-  start.setHours(
-    Math.max(
-      prefStartHour,
-      DAY_START_HOUR
-    ),
-    0,
-    0,
-    0
-  );
-
+  start.setHours(Math.max(prefStartHour, DAY_START_HOUR), 0, 0, 0);
 
   const end = new Date(day);
 
-  end.setHours(
-    Math.min(
-      prefEndHour,
-      DAY_END_HOUR
-    ),
-    0,
-    0,
-    0
-  );
-
+  end.setHours(Math.min(prefEndHour, DAY_END_HOUR), 0, 0, 0);
 
   return {
     start: start.getTime(),
@@ -551,11 +425,7 @@ function buildDaySlotBounds(
 
 /* ---------- CHECK FOR CONFLICTS ---------- */
 
-function isSlotFree(
-  candidateStart,
-  candidateEnd,
-  ignoreTaskId = null
-) {
+function isSlotFree(candidateStart, candidateEnd, ignoreTaskId = null) {
   const startMs = new Date(candidateStart).getTime();
   const endMs = new Date(candidateEnd).getTime();
 
@@ -576,12 +446,9 @@ function isSlotFree(
       return true;
     }
 
-    const existingStartMs = new Date(
-      task.scheduledStart
-    ).getTime();
+    const existingStartMs = new Date(task.scheduledStart).getTime();
 
-    // Invalid existing entries cannot be reliably checked.
-    // Report them in the console so they can be corrected.
+    // Invalid existing entries can't be checked reliably.
     if (!Number.isFinite(existingStartMs)) {
       console.warn(
         "Plannr: Ignoring an item with an invalid start date:",
@@ -592,18 +459,12 @@ function isSlotFree(
 
     const rawDuration = Number(task.durationMinutes);
     const durationMinutes =
-      Number.isFinite(rawDuration) && rawDuration > 0
-        ? rawDuration
-        : 60;
+      Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 60;
 
-    const existingEndMs =
-      existingStartMs + durationMinutes * 60000;
+    const existingEndMs = existingStartMs + durationMinutes * 60000;
 
-    // Adjacent events are allowed; actual overlap is not.
-    return (
-      endMs <= existingStartMs ||
-      startMs >= existingEndMs
-    );
+    // Adjacent items are allowed; actual overlap is not.
+    return endMs <= existingStartMs || startMs >= existingEndMs;
   });
 }
 
@@ -611,199 +472,79 @@ function isSlotFree(
 /* ---------- 7. RENDERING ---------- */
 
 function renderWeekLabel() {
-
-  document.getElementById(
-    "week-label"
-  ).textContent =
-    formatWeekLabel(
-      currentWeekStart
-    );
+  document.getElementById("week-label").textContent =
+    formatWeekLabel(currentWeekStart);
 }
 
 
 function renderCalendar() {
-
-  const grid =
-    document.getElementById(
-      "calendar-grid"
-    );
-
+  const grid = document.getElementById("calendar-grid");
 
   grid.innerHTML = "";
 
-
-  const totalHours =
-    DAY_END_HOUR -
-    DAY_START_HOUR;
-
+  const totalHours = DAY_END_HOUR - DAY_START_HOUR;
 
   grid.style.gridTemplateRows =
     `auto repeat(${totalHours}, var(--hour-height))`;
 
-
-  /*
-     Empty top-left corner
-  */
-
-  const corner =
-    document.createElement("div");
-
+  // Empty top-left corner
+  const corner = document.createElement("div");
   corner.style.gridRow = "1";
-
   corner.style.gridColumn = "1";
-
   grid.appendChild(corner);
 
+  const todayISO = formatDateISO(new Date());
 
-  /*
-     Today's date
-  */
-
-  const todayISO =
-    formatDateISO(
-      new Date()
-    );
-
-
-  /*
-     Day headers
-  */
-
+  // Day headers
   for (let i = 0; i < 7; i++) {
+    const dayDate = addDays(currentWeekStart, i);
 
-    const dayDate =
-      addDays(
-        currentWeekStart,
-        i
-      );
+    const header = document.createElement("div");
+    header.className = "day-header";
 
-
-    const header =
-      document.createElement("div");
-
-
-    header.className =
-      "day-header";
-
-
-    const isToday =
-      formatDateISO(dayDate) ===
-      todayISO;
-
+    const isToday = formatDateISO(dayDate) === todayISO;
 
     if (isToday) {
-      header.classList.add(
-        "is-today"
-      );
+      header.classList.add("is-today");
     }
 
-
-    header.style.gridColumn =
-      i + 2;
-
+    header.style.gridColumn = i + 2;
 
     header.innerHTML = `
       <span class="day-name">
-        ${dayDate.toLocaleDateString(
-          undefined,
-          {
-            weekday: "short"
-          }
-        )} ${dayDate.getDate()}
+        ${dayDate.toLocaleDateString(undefined, { weekday: "short" })} ${dayDate.getDate()}
       </span>
-
-      ${
-        isToday
-          ? '<span class="today-label">TODAY</span>'
-          : ""
-      }
+      ${isToday ? '<span class="today-label">TODAY</span>' : ""}
     `;
-
 
     grid.appendChild(header);
   }
 
+  // Hour labels
+  for (let h = 0; h < totalHours; h++) {
+    const label = document.createElement("div");
+    label.className = "hour-label";
+    label.style.gridRow = h + 2;
 
-  /*
-     Hour labels
-  */
+    const hour = DAY_START_HOUR + h;
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+    const ampm = hour < 12 ? "am" : "pm";
 
-  for (
-    let h = 0;
-    h < totalHours;
-    h++
-  ) {
-
-    const label =
-      document.createElement("div");
-
-
-    label.className =
-      "hour-label";
-
-
-    label.style.gridRow =
-      h + 2;
-
-
-    const hour =
-      DAY_START_HOUR + h;
-
-
-    const displayHour =
-      hour % 12 === 0
-        ? 12
-        : hour % 12;
-
-
-    const ampm =
-      hour < 12
-        ? "am"
-        : "pm";
-
-
-    label.textContent =
-      `${displayHour}${ampm}`;
-
+    label.textContent = `${displayHour}${ampm}`;
 
     grid.appendChild(label);
   }
 
-
-  /*
-     Day columns
-  */
-
+  // Day columns
   for (let i = 0; i < 7; i++) {
-
-    const col =
-      document.createElement("div");
-
-
-    col.className =
-      "day-column";
-
-
-    col.style.gridColumn =
-      i + 2;
-
-
-    col.style.gridRow =
-      `2 / span ${totalHours}`;
-
-
-    col.dataset.date =
-      formatDateISO(
-        addDays(
-          currentWeekStart,
-          i
-        )
-      );
-
+    const col = document.createElement("div");
+    col.className = "day-column";
+    col.style.gridColumn = i + 2;
+    col.style.gridRow = `2 / span ${totalHours}`;
+    col.dataset.date = formatDateISO(addDays(currentWeekStart, i));
 
     grid.appendChild(col);
   }
-
 
   placeTasksOnGrid();
 
@@ -814,135 +555,81 @@ function renderCalendar() {
 /* ---------- PLACE TASKS ON CALENDAR ---------- */
 
 function placeTasksOnGrid() {
-
-  const columns =
-    document.querySelectorAll(
-      ".day-column"
-    );
-
-
   const columnsByDate = {};
 
-
-  columns.forEach((col) => {
-
-    columnsByDate[
-      col.dataset.date
-    ] = col;
-
+  document.querySelectorAll(".day-column").forEach((col) => {
+    columnsByDate[col.dataset.date] = col;
   });
 
+  const hourHeightPx = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue("--hour-height")
+  );
+
+  const gridMinutes = (DAY_END_HOUR - DAY_START_HOUR) * 60;
 
   tasks.forEach((task) => {
-
     if (!task.scheduledStart) {
       return;
     }
 
+    const start = new Date(task.scheduledStart);
 
-    const start =
-      new Date(
-        task.scheduledStart
-      );
+    if (Number.isNaN(start.getTime())) {
+      return;
+    }
 
-
-    const dateKey =
-      formatDateISO(start);
-
-
-    const col =
-      columnsByDate[dateKey];
-
+    const col = columnsByDate[formatDateISO(start)];
 
     if (!col) {
       return;
     }
 
+    const duration = Number(task.durationMinutes) > 0
+      ? Number(task.durationMinutes)
+      : 60;
 
-    const hourHeightPx =
-      parseFloat(
-        getComputedStyle(
-          document.documentElement
-        ).getPropertyValue(
-          "--hour-height"
-        )
-      );
+    const startMin =
+      (start.getHours() - DAY_START_HOUR) * 60 + start.getMinutes();
+    const endMin = startMin + duration;
 
+    // Entirely outside the visible hours: nothing to draw.
+    if (endMin <= 0 || startMin >= gridMinutes) {
+      return;
+    }
 
-    const startMinutesFromDayStart =
-      (
-        start.getHours() -
-        DAY_START_HOUR
-      ) *
-        60 +
-      start.getMinutes();
+    // Clamp partially visible items to the grid.
+    const clampedStart = Math.max(0, startMin);
+    const clampedEnd = Math.min(gridMinutes, endMin);
 
+    const topPx = (clampedStart / 60) * hourHeightPx;
+    const heightPx = ((clampedEnd - clampedStart) / 60) * hourHeightPx;
 
-    const topPx =
-      (
-        startMinutesFromDayStart /
-        60
-      ) *
-      hourHeightPx;
+    const block = document.createElement("div");
 
-
-    const heightPx =
-      (
-        task.durationMinutes /
-        60
-      ) *
-      hourHeightPx;
-
-
-    const block =
-      document.createElement("div");
+    const colorIndex =
+      (Math.abs(
+        [...String(task.id)].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+      ) %
+        6) +
+      1;
 
     block.className =
       "task-block event-color-" +
-      (
-        Math.abs(
-          [...task.id].reduce(
-            (sum, char) => sum + char.charCodeAt(0),
-            0
-          )
-        ) % 6 + 1
-      ) +
-      (
-        task.status === "done"
-          ? " is-done"
-          : ""
-      );
-     
-    block.style.top =
-      `${topPx}px`;
+      colorIndex +
+      (task.status === "done" ? " is-done" : "");
 
-
-    block.style.height =
-      `${Math.max(
-        heightPx,
-        20
-      )}px`;
-
+    block.style.top = `${topPx}px`;
+    block.style.height = `${Math.max(heightPx, 20)}px`;
 
     block.innerHTML = `
-      <span class="task-title">
-        ${escapeHTML(task.title)}
-      </span>
-
-      <span class="task-time">
-        ${formatTimeShort(start)}
-      </span>
+      <span class="task-title">${escapeHTML(task.title)}</span>
+      <span class="task-time">${formatTimeShort(start)}</span>
     `;
 
-
-    block.addEventListener(
-      "click",
-      () => toggleTaskDone(task.id)
-    );
-
+    // Click opens the edit / delete popup
+    block.addEventListener("click", () => openTaskModal(task.id));
 
     col.appendChild(block);
-
   });
 }
 
@@ -950,23 +637,17 @@ function placeTasksOnGrid() {
 /* ---------- FORMAT TIME ---------- */
 
 function formatTimeShort(date) {
-
-  return date.toLocaleTimeString(
-    undefined,
-    {
-      hour: "numeric",
-      minute: "2-digit"
-    }
-  );
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 
 /* ---------- ESCAPE HTML ---------- */
 
 function escapeHTML(str) {
-
-  const div =
-    document.createElement("div");
+  const div = document.createElement("div");
 
   div.textContent = str;
 
@@ -977,222 +658,261 @@ function escapeHTML(str) {
 /* ---------- COMPLETE TASK ---------- */
 
 function toggleTaskDone(taskId) {
-
-  const task =
-    tasks.find(
-      (t) => t.id === taskId
-    );
-
+  const task = tasks.find((t) => t.id === taskId);
 
   if (!task) {
     return;
   }
 
+  // Un-completing must not create an overlap.
   if (task.status === "done" && task.scheduledStart) {
     const start = new Date(task.scheduledStart);
-    const end = new Date(start.getTime() + (task.durationMinutes || 60) * 60000);
-   
+    const end = new Date(
+      start.getTime() + (task.durationMinutes || 60) * 60000
+    );
+
     if (!isSlotFree(start, end, task.id)) {
-       setStatus("Can't undo: that time is now taken. Try replanning it.", true);
-       return;
+      setStatus("Can't undo: that time is now taken. Try replanning it.", true);
+      return;
     }
   }
 
-  task.status =
-    task.status === "done"
-      ? "scheduled"
-      : "done";
-
+  task.status = task.status === "done" ? "scheduled" : "done";
 
   saveTasks();
 
   renderCalendar();
+}
+
+
+/* ---------- EDIT / DELETE POPUP ---------- */
+
+let editingTaskId = null;
+
+function openTaskModal(taskId) {
+  const task = tasks.find((t) => t.id === taskId);
+
+  if (!task) {
+    return;
+  }
+
+  editingTaskId = taskId;
+
+  const start = task.scheduledStart ? new Date(task.scheduledStart) : null;
+
+  document.getElementById("edit-title").value = task.title;
+  document.getElementById("edit-date").value = start ? formatDateISO(start) : "";
+  document.getElementById("edit-start").value = start
+    ? formatTimeInput(start)
+    : "";
+  document.getElementById("edit-duration").value = task.durationMinutes || 60;
+  document.getElementById("edit-done-btn").textContent =
+    task.status === "done" ? "Mark not done" : "Mark done";
+
+  document.getElementById("task-modal").classList.remove("is-hidden");
+}
+
+function closeTaskModal() {
+  editingTaskId = null;
+
+  document.getElementById("task-modal").classList.add("is-hidden");
+}
+
+function handleEditSubmit(event) {
+  event.preventDefault();
+
+  const task = tasks.find((t) => t.id === editingTaskId);
+
+  if (!task) {
+    closeTaskModal();
+    return;
+  }
+
+  const title = document.getElementById("edit-title").value.trim();
+  const date = document.getElementById("edit-date").value;
+  const time = document.getElementById("edit-start").value;
+  const duration = Number(document.getElementById("edit-duration").value);
+
+  if (
+    !title ||
+    !date ||
+    !time ||
+    !Number.isFinite(duration) ||
+    duration < 15 ||
+    duration > (DAY_END_HOUR - DAY_START_HOUR) * 60
+  ) {
+    alert("Please fill in every field with valid values.");
+    return;
+  }
+
+  const newStart = new Date(`${date}T${time}`);
+
+  if (Number.isNaN(newStart.getTime())) {
+    alert("Please enter a valid date and time.");
+    return;
+  }
+
+  const newEnd = new Date(newStart.getTime() + duration * 60000);
+
+  // Keep it inside the visible calendar hours, on one day.
+  const dayStart = new Date(newStart);
+  dayStart.setHours(DAY_START_HOUR, 0, 0, 0);
+
+  const dayEnd = new Date(newStart);
+  dayEnd.setHours(DAY_END_HOUR, 0, 0, 0);
+
+  if (newStart < dayStart || newEnd > dayEnd) {
+    alert(
+      `Keep it between ${DAY_START_HOUR}:00 and ${DAY_END_HOUR}:00 on the same day.`
+    );
+    return;
+  }
+
+  const startChanged =
+    !task.scheduledStart ||
+    new Date(task.scheduledStart).getTime() !== newStart.getTime();
+
+  if (startChanged && newStart < new Date()) {
+    alert("You can't move something into the past.");
+    return;
+  }
+
+  if (task.status === "scheduled" && !isSlotFree(newStart, newEnd, task.id)) {
+    alert("That time overlaps another task or event.");
+    return;
+  }
+
+  if (task.deadline && newEnd > new Date(`${task.deadline}T23:59:59`)) {
+    if (!confirm("This is after the deadline. Save anyway?")) {
+      return;
+    }
+  }
+
+  task.title = title;
+  task.durationMinutes = duration;
+  task.scheduledStart = formatLocalDateTime(newStart);
+
+  saveTasks();
+
+  currentWeekStart = getStartOfWeek(newStart);
+
+  closeTaskModal();
+  setStatus(`Updated "${title}".`);
+  renderWeekLabel();
+  renderCalendar();
+}
+
+function handleEditDelete() {
+  const task = tasks.find((t) => t.id === editingTaskId);
+
+  if (!task) {
+    closeTaskModal();
+    return;
+  }
+
+  if (!confirm(`Delete "${task.title}"?`)) {
+    return;
+  }
+
+  const title = task.title;
+
+  tasks = tasks.filter((t) => t.id !== task.id);
+
+  saveTasks();
+
+  closeTaskModal();
+  setStatus(`Deleted "${title}".`);
+  renderCalendar();
+}
+
+function handleEditToggleDone() {
+  const id = editingTaskId;
+
+  closeTaskModal();
+
+  if (id) {
+    toggleTaskDone(id);
+  }
 }
 
 
 /* ---------- 8. MANUAL EVENTS ---------- */
 
 function handleAddEvent(event) {
-
   event.preventDefault();
 
+  const title = document.getElementById("event-title").value.trim();
+  const date = document.getElementById("event-date").value;
+  const startTime = document.getElementById("event-start").value;
+  const endTime = document.getElementById("event-end").value;
 
-  const title =
-    document.getElementById(
-      "event-title"
-    ).value.trim();
-
-
-  const date =
-    document.getElementById(
-      "event-date"
-    ).value;
-
-
-  const startTime =
-    document.getElementById(
-      "event-start"
-    ).value;
-
-
-  const endTime =
-    document.getElementById(
-      "event-end"
-    ).value;
-
-
-  if (
-    !title ||
-    !date ||
-    !startTime ||
-    !endTime
-  ) {
+  if (!title || !date || !startTime || !endTime) {
     return;
   }
 
-
-  const start =
-    new Date(
-      `${date}T${startTime}`
-    );
-
-
-  const end =
-    new Date(
-      `${date}T${endTime}`
-    );
-
+  const start = new Date(`${date}T${startTime}`);
+  const end = new Date(`${date}T${endTime}`);
 
   if (end <= start) {
-
-    alert(
-      "End time must be after start time."
-    );
-
+    alert("End time must be after start time.");
     return;
   }
 
+  const durationMinutes = Math.round(
+    (end.getTime() - start.getTime()) / (1000 * 60)
+  );
 
-  const durationMinutes =
-    Math.round(
-      (
-        end.getTime() -
-        start.getTime()
-      ) /
-      (1000 * 60)
-    );
-
-
-  /*
-     Prevent manual events from being
-     created in the past.
-  */
-
+  // Manual events can't be created in the past.
   if (start < new Date()) {
-
-    alert(
-      "You cannot create an event in the past."
-    );
-
+    alert("You cannot create an event in the past.");
     return;
   }
 
+  if (!isSlotFree(start, end)) {
+    alert("That time overlaps another task or event.");
+    return;
+  }
 
-  const newEvent = {
-
-    id:
-      crypto.randomUUID(),
-
+  tasks.push({
+    id: crypto.randomUUID(),
     title,
-
     durationMinutes,
-
     deadline: null,
-
     preferredTime: null,
-
     status: "scheduled",
-
-    scheduledStart:
-      formatLocalDateTime(start),
-
+    priority: "medium",
+    scheduledStart: formatLocalDateTime(start),
     type: "event"
-  };
-
-
-  if (
-    !isSlotFree(
-      start,
-      end
-    )
-  ) {
-
-    alert(
-      "That time overlaps another task or event."
-    );
-
-    return;
-  }
-
-
-  tasks.push(newEvent);
+  });
 
   saveTasks();
 
+  // Show the week containing the new event.
+  currentWeekStart = getStartOfWeek(start);
 
-  /*
-     Show the week containing
-     the new event.
-  */
-
-  currentWeekStart =
-    getStartOfWeek(start);
-
-
-  document.getElementById(
-    "event-form"
-  ).reset();
-
-
-  document.getElementById(
-    "event-modal"
-  ).classList.add(
-    "is-hidden"
-  );
-
+  document.getElementById("event-form").reset();
+  document.getElementById("event-modal").classList.add("is-hidden");
 
   renderWeekLabel();
-
   renderCalendar();
 }
 
 
 /* ---------- 9. STATUS ---------- */
 
-function setStatus(
-  message,
-  isError = false
-) {
+function setStatus(message, isError = false) {
+  const el = document.getElementById("status-line");
 
-  const el =
-    document.getElementById(
-      "status-line"
-    );
+  el.textContent = message;
 
-
-  el.textContent =
-    message;
-
-
-  el.classList.toggle(
-    "is-error",
-    isError
-  );
+  el.classList.toggle("is-error", isError);
 }
+
 
 /* ============================================================
    9.5. PROACTIVE INSIGHTS
-   Looks for tasks that are at risk of missing their deadline.
+   Looks for tasks at risk of missing their deadline and
+   for days that are overloaded.
    ============================================================ */
 
 function getTaskEnd(task) {
@@ -1200,9 +920,7 @@ function getTaskEnd(task) {
 
   const start = new Date(task.scheduledStart);
 
-  return new Date(
-    start.getTime() + (task.durationMinutes || 60) * 60 * 1000
-  );
+  return new Date(start.getTime() + (task.durationMinutes || 60) * 60 * 1000);
 }
 
 function findInsightSlot(task) {
@@ -1232,7 +950,7 @@ function analyzeTaskDeadline(task) {
 
   const scheduledEnd = scheduledStart ? getTaskEnd(task) : null;
 
-  // Already scheduled after the deadline
+  // Scheduled after the deadline
   if (scheduledEnd && scheduledEnd > deadline) {
     return {
       type: "deadline",
@@ -1332,12 +1050,15 @@ function insightKey(insight) {
   if (insight.type === "overloaded") {
     return `overloaded:${new Date(insight.task.scheduledStart).toDateString()}`;
   }
+
   return `${insight.type}:${insight.task.id}`;
 }
 
 function formatInsightTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
-    weekday: "long", hour: "numeric", minute: "2-digit"
+    weekday: "long",
+    hour: "numeric",
+    minute: "2-digit"
   });
 }
 
@@ -1379,7 +1100,7 @@ function renderProactiveInsight() {
         <strong>${escapeHTML(formatInsightTime(insight.suggestedSlot))}</strong>
       </div>
       <button type="button" class="insight-action"
-        data-insight-action="schedule" data-task-id="${task.id}">
+        data-insight-action="schedule" data-task-id="${escapeHTML(task.id)}">
         Schedule it
       </button>`;
   }
@@ -1399,122 +1120,72 @@ function renderProactiveInsight() {
 
   container.style.display = "block";
 
-  const scheduleButton = container.querySelector('[data-insight-action="schedule"]');
+  const scheduleButton = container.querySelector(
+    '[data-insight-action="schedule"]'
+  );
+
   if (scheduleButton) {
     scheduleButton.addEventListener("click", () =>
       scheduleInsightTask(scheduleButton.dataset.taskId)
     );
   }
 
-  container.querySelector('[data-insight-action="dismiss"]').addEventListener("click", () => {
-    dismissedInsights.add(insightKey(insight));
-    container.style.display = "none";
-  });
+  container
+    .querySelector('[data-insight-action="dismiss"]')
+    .addEventListener("click", () => {
+      dismissedInsights.add(insightKey(insight));
+      container.style.display = "none";
+    });
 }
+
 /**
- * Schedule a task using the slot discovered
- * by the proactive insight engine.
+ * Schedule a task using the slot found by the insight engine.
  */
 async function scheduleInsightTask(taskId) {
-
-  const task =
-    tasks.find(
-      (t) => t.id === taskId
-    );
-
+  const task = tasks.find((t) => t.id === taskId);
 
   if (!task) {
     return;
   }
 
-
-  const suggestedSlot =
-    findInsightSlot(task);
-
+  const suggestedSlot = findInsightSlot(task);
 
   if (!suggestedSlot) {
-
-    setStatus(
-      `I couldn't find an open time for "${task.title}".`,
-      true
-    );
-
+    setStatus(`I couldn't find an open time for "${task.title}".`, true);
     return;
   }
 
-
-  /*
-     Update the EXISTING task.
-     Do not create a duplicate.
-  */
-  task.scheduledStart =
-    suggestedSlot;
-
-
-  task.status =
-    "scheduled";
-
+  // Update the EXISTING task. Do not create a duplicate.
+  task.scheduledStart = suggestedSlot;
+  task.status = "scheduled";
 
   await saveTasks();
 
-
-  /*
-     Show the week containing
-     the newly scheduled task.
-  */
-  currentWeekStart =
-    getStartOfWeek(
-      new Date(suggestedSlot)
-    );
-
+  currentWeekStart = getStartOfWeek(new Date(suggestedSlot));
 
   setStatus(
-    `Scheduled "${task.title}" for ${new Date(
-      suggestedSlot
-    ).toLocaleString(
+    `Scheduled "${task.title}" for ${new Date(suggestedSlot).toLocaleString(
       undefined,
-      {
-        weekday: "long",
-        hour: "numeric",
-        minute: "2-digit"
-      }
+      { weekday: "long", hour: "numeric", minute: "2-digit" }
     )}.`
   );
 
-
   renderWeekLabel();
-
   renderCalendar();
-
-  renderProactiveInsight();
 }
 
-
-/**
- * Run proactive analysis.
- */
 function runProactiveInsights() {
-
-  /*
-     Small delay prevents the insight from appearing
-     before the calendar has finished rendering.
-  */
-  setTimeout(
-    () => {
-      renderProactiveInsight();
-    },
-    100
-  );
+  // Small delay so the insight doesn't appear before the calendar renders.
+  setTimeout(() => {
+    renderProactiveInsight();
+  }, 100);
 }
 
 
 /* ---------- FIND EXISTING TASK ---------- */
 
 function findTaskByTitle(targetTitle) {
-  if (
-    typeof targetTitle !== "string" ||
-    !targetTitle.trim()
-  ) {
+  if (typeof targetTitle !== "string" || !targetTitle.trim()) {
     return null;
   }
 
@@ -1529,31 +1200,27 @@ function findTaskByTitle(targetTitle) {
       task.title.trim() !== ""
   );
 
-  // 1. Try an exact title match.
+  // 1. Exact title match
   let match = scheduledTasks.find(
-    (task) =>
-      task.title.toLowerCase().trim() === target
+    (task) => task.title.toLowerCase().trim() === target
   );
 
   if (match) {
     return match;
   }
 
-  // 2. Try a partial title match.
+  // 2. Partial title match
   match = scheduledTasks.find((task) => {
     const title = task.title.toLowerCase().trim();
 
-    return (
-      title.includes(target) ||
-      target.includes(title)
-    );
+    return title.includes(target) || target.includes(title);
   });
 
   if (match) {
     return match;
   }
 
-  // 3. Match meaningful words in the title.
+  // 3. Match meaningful words
   const ignoredWords = new Set([
     "the",
     "and",
@@ -1561,7 +1228,6 @@ function findTaskByTitle(targetTitle) {
     "with",
     "from",
     "into",
-    "move",
     "move",
     "reschedule",
     "schedule",
@@ -1576,11 +1242,7 @@ function findTaskByTitle(targetTitle) {
 
   const words = target
     .split(/\s+/)
-    .filter(
-      (word) =>
-        word.length > 2 &&
-        !ignoredWords.has(word)
-    );
+    .filter((word) => word.length > 2 && !ignoredWords.has(word));
 
   if (words.length === 0) {
     return null;
@@ -1605,7 +1267,6 @@ function findTaskByTitle(targetTitle) {
     }
   });
 
-  // Require at least one meaningful matching word.
   return bestScore > 0 ? bestMatch : null;
 }
 
@@ -1632,20 +1293,10 @@ function rescheduleTask(parsed) {
     return false;
   }
 
-  // Keep the original date if no new date was provided.
+  // Keep the original date / time if none was provided.
   const newDate = parsed.date || formatDateISO(oldStart);
+  const newTime = parsed.time || formatTimeInput(oldStart);
 
-  // Keep the original time if no new time was provided.
-  let newTime = parsed.time;
-
-  if (!newTime) {
-    const hours = String(oldStart.getHours()).padStart(2, "0");
-    const minutes = String(oldStart.getMinutes()).padStart(2, "0");
-
-    newTime = `${hours}:${minutes}`;
-  }
-
-  // Validate the date and time before creating a Date.
   if (
     typeof newDate !== "string" ||
     !/^\d{4}-\d{2}-\d{2}$/.test(newDate) ||
@@ -1660,24 +1311,20 @@ function rescheduleTask(parsed) {
   const [hour, minute] = newTime.split(":").map(Number);
 
   if (
-    month < 1 || month > 12 ||
-    day < 1 || day > 31 ||
-    hour < 0 || hour > 23 ||
-    minute < 0 || minute > 59
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
   ) {
     setStatus("Please provide a valid date and time.", true);
     return false;
   }
 
-  const newStart = new Date(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    0,
-    0
-  );
+  const newStart = new Date(year, month - 1, day, hour, minute, 0, 0);
 
   // Reject impossible dates such as February 31.
   if (
@@ -1696,24 +1343,14 @@ function rescheduleTask(parsed) {
     return false;
   }
 
-  const newEnd = new Date(
-    newStart.getTime() + duration * 60 * 1000
-  );
+  const newEnd = new Date(newStart.getTime() + duration * 60 * 1000);
 
   if (newStart < new Date()) {
     setStatus("I can't move a task into the past.", true);
     return false;
   }
 
-  const originalIndex = tasks.indexOf(task);
-
-  const free = isSlotFree(
-  newStart,
-  newEnd,
-  task.id
-  );
-
-  if (!free) {
+  if (!isSlotFree(newStart, newEnd, task.id)) {
     setStatus("That time overlaps another task or event.", true);
     return false;
   }
@@ -1734,7 +1371,7 @@ function rescheduleTask(parsed) {
 }
 
 
-/* ---------- DELETE TASK ---------- */
+/* ---------- DELETE TASK (AI) ---------- */
 
 function deleteTaskWithAI(parsed) {
   if (!parsed || !parsed.targetTitle) {
@@ -1745,20 +1382,14 @@ function deleteTaskWithAI(parsed) {
   const task = findTaskByTitle(parsed.targetTitle);
 
   if (!task) {
-    setStatus(
-      `I couldn't find "${parsed.targetTitle}" on your calendar.`,
-      true
-    );
+    setStatus(`I couldn't find "${parsed.targetTitle}" on your calendar.`, true);
     return false;
   }
 
   const taskTitle = task.title;
   const taskId = task.id;
 
-  // Remove only the selected task.
-  tasks = tasks.filter(
-    (item) => item.id !== taskId
-  );
+  tasks = tasks.filter((item) => item.id !== taskId);
 
   saveTasks();
 
@@ -1772,212 +1403,99 @@ function deleteTaskWithAI(parsed) {
 
 /* ---------- CREATE TASK ---------- */
 
-async function createTask(
-  parsed,
-  rawText
-) {
+async function createTask(parsed, rawText) {
+  const durationMinutes = parsed.durationMinutes || 60;
+
+  // The calendar only shows DAY_START_HOUR to DAY_END_HOUR.
+  if (durationMinutes > (DAY_END_HOUR - DAY_START_HOUR) * 60) {
+    setStatus(
+      `That's longer than one day's planning window (${DAY_END_HOUR - DAY_START_HOUR} hours). Try a shorter block.`,
+      true
+    );
+    return false;
+  }
 
   /*
-     If the AI gave an exact date AND time,
-     use that exact time.
-
+     If the AI gave an exact date AND time, use that exact time.
      Otherwise use our scheduling algorithm.
   */
 
   let scheduledStart = null;
 
+  if (parsed.date && parsed.time) {
+    const exactStart = new Date(`${parsed.date}T${parsed.time}`);
 
-  if (
-    parsed.date &&
-    parsed.time
-  ) {
+    const exactEnd = new Date(
+      exactStart.getTime() + durationMinutes * 60 * 1000
+    );
 
-    const exactStart =
-      new Date(
-        `${parsed.date}T${parsed.time}`
-      );
-
-
-    const exactEnd =
-      new Date(
-        exactStart.getTime() +
-        (
-          parsed.durationMinutes ||
-          60
-        ) *
-        60 *
-        1000
-      );
-
-
-    /*
-       Don't allow past times.
-    */
-
-    if (
-      exactStart < new Date()
-    ) {
-
-      setStatus(
-        "That time has already passed. Try a future time.",
-        true
-      );
-
+    if (exactStart < new Date()) {
+      setStatus("That time has already passed. Try a future time.", true);
       return false;
     }
 
-
-    /*
-       Don't allow conflicts.
-    */
-
-    if (
-      !isSlotFree(
-        exactStart,
-        exactEnd
-      )
-    ) {
-
-      setStatus(
-        "That time overlaps another task or event.",
-        true
-      );
-
+    if (!isSlotFree(exactStart, exactEnd)) {
+      setStatus("That time overlaps another task or event.", true);
       return false;
     }
 
-
-    scheduledStart =
-      formatLocalDateTime(
-        exactStart
-      );
-
+    scheduledStart = formatLocalDateTime(exactStart);
   } else {
-
-    /*
-       No exact time was given.
-       Let our scheduler choose one.
-    */
-
     const taskForScheduling = {
-
-      title:
-        parsed.title ||
-        rawText,
-
-      durationMinutes:
-        parsed.durationMinutes ||
-        60,
-
-      deadline:
-        parsed.deadline ||
-        null,
-
-      preferredTime:
-        parsed.preferredTime ||
-        null,
-
+      title: parsed.title || rawText,
+      durationMinutes,
+      deadline: parsed.deadline || null,
+      preferredTime: parsed.preferredTime || null,
       status: "scheduled",
-
       priority: parsed.priority || "medium",
-
       scheduledStart: null,
-
       type: "task"
     };
 
+    // A date without a time means "that day", so search only that day.
     if (parsed.date && !parsed.time) {
       taskForScheduling.earliestStart = new Date(`${parsed.date}T00:00:00`);
       taskForScheduling.deadline = parsed.date;
     }
-    
-    scheduledStart =
-     findOpenSlot(
-     taskForScheduling
-    );
 
+    scheduledStart = findOpenSlot(taskForScheduling);
 
     if (!scheduledStart) {
-
       setStatus(
         "Couldn't find an open future slot before that deadline.",
         true
       );
-
       return false;
     }
   }
 
-
-  /*
-     Create the actual task.
-  */
-
-  const task = {
-
-    id:
-      crypto.randomUUID(),
-     
-    title:
-      parsed.title ||
-      rawText,
-
-    durationMinutes:
-      parsed.durationMinutes ||
-      60,
-
-    deadline:
-      parsed.deadline ||
-      null,
-
-    preferredTime:
-      parsed.preferredTime ||
-      null,
-
+  tasks.push({
+    id: crypto.randomUUID(),
+    title: parsed.title || rawText,
+    durationMinutes,
+    deadline: parsed.deadline || null,
+    preferredTime: parsed.preferredTime || null,
     status: "scheduled",
-
     priority: parsed.priority || "medium",
-
     scheduledStart,
-
     type: "task"
-  };
-
-
-  tasks.push(task);
+  });
 
   await saveTasks();
 
-
-  /*
-     Automatically show the week
-     where the task was created.
-  */
-
-  currentWeekStart =
-    getStartOfWeek(
-      new Date(scheduledStart)
-    );
-
+  // Show the week where the task was created.
+  currentWeekStart = getStartOfWeek(new Date(scheduledStart));
 
   setStatus(
-    `Scheduled for ${new Date(
-      scheduledStart
-    ).toLocaleString(
-      undefined,
-      {
-        weekday: "long",
-        hour: "numeric",
-        minute: "2-digit"
-      }
-    )}.`
+    `Scheduled for ${new Date(scheduledStart).toLocaleString(undefined, {
+      weekday: "long",
+      hour: "numeric",
+      minute: "2-digit"
+    })}.`
   );
 
-
   renderWeekLabel();
-
   renderCalendar();
-
 
   return true;
 }
@@ -1985,23 +1503,28 @@ async function createTask(
 
 /* ---------- AI PARSING (with retry) ---------- */
 
-const RETRYABLE_STATUS = [429, 503, 504];
+// 429 is deliberately NOT retried: from our own API it means "rate limited".
+const RETRYABLE_STATUS = [503, 504];
 
 async function waitBeforeRetry(attempt, onRetry) {
   if (onRetry) onRetry(attempt);
-  const delay = 700 * 2 ** (attempt - 1) + Math.random() * 300; // ~0.7s, 1.4s, 2.8s
+
+  const delay = 700 * 2 ** (attempt - 1) + Math.random() * 300;
+
   await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 async function parseTaskWithAI(rawText, onRetry) {
   const maxAttempts = 2;
 
-  const { data: { session } } = await supabaseClient.auth.getSession();
+  const {
+    data: { session }
+  } = await supabaseClient.auth.getSession();
 
   if (!session) {
-     const e = new Error("Please sign in again.");
-     e.kind = "auth";
-     throw e;
+    const e = new Error("Please sign in again.");
+    e.kind = "auth";
+    throw e;
   }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -2011,10 +1534,13 @@ async function parseTaskWithAI(rawText, onRetry) {
       response = await fetch("/api/parse-task", {
         method: "POST",
         headers: {
-           "Content-Type": "application/json",
-           "Authorization": `Bearer ${session.access_token}`
-         },
-         body: JSON.stringify({ text: rawText, today: formatDateISO(new Date()) })
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          text: rawText,
+          today: formatDateISO(new Date())
+        })
       });
     } catch (networkErr) {
       if (attempt === maxAttempts) {
@@ -2022,12 +1548,14 @@ async function parseTaskWithAI(rawText, onRetry) {
         e.kind = "network";
         throw e;
       }
+
       await waitBeforeRetry(attempt, onRetry);
       continue;
     }
 
-    // A 502 from Vercel may not return JSON, so parse defensively
+    // Some gateway errors aren't JSON, so parse defensively.
     let data = null;
+
     try {
       data = await response.json();
     } catch {
@@ -2040,12 +1568,25 @@ async function parseTaskWithAI(rawText, onRetry) {
         e.kind = "invalid";
         throw e;
       }
+
       return data;
     }
 
     if (response.status === 401) {
       const e = new Error("Session expired.");
       e.kind = "auth";
+      throw e;
+    }
+
+    if (response.status === 403) {
+      const e = new Error(data?.error || "Not allowed.");
+      e.kind = "forbidden";
+      throw e;
+    }
+
+    if (response.status === 429) {
+      const e = new Error(data?.error || "Too many requests.");
+      e.kind = "rate_limit";
       throw e;
     }
 
@@ -2062,16 +1603,15 @@ async function parseTaskWithAI(rawText, onRetry) {
   }
 }
 
+
 /* ============================================================
    SMART AUTO-RESCHEDULING
    ============================================================ */
 
 const MISSED_LOOKBACK_DAYS = 7;
 
-let lastReplanUndo = null;        // [{ id, scheduledStart }]
+let lastReplanUndo = null; // [{ id, scheduledStart }]
 let missedBannerDismissed = false;
-
-const MISSED_DISMISS_KEY = "plannr_missed_dismissed";
 
 
 /* ---------- BANNER CONTAINER ---------- */
@@ -2109,10 +1649,7 @@ function completeTaskWithAI(parsed) {
   const task = findTaskByTitle(parsed.targetTitle);
 
   if (!task) {
-    setStatus(
-      `I couldn't find "${parsed.targetTitle}" on your calendar.`,
-      true
-    );
+    setStatus(`I couldn't find "${parsed.targetTitle}" on your calendar.`, true);
     return false;
   }
 
@@ -2170,7 +1707,7 @@ function getReplanCandidates(scope, targetTask, earliest) {
   const todayKey = formatDateISO(now);
 
   return tasks.filter((task) => {
-    // Events (football practice, appointments) never move on their own
+    // Events (practice, appointments) never move on their own.
     if (
       task.type !== "task" ||
       task.status !== "scheduled" ||
@@ -2199,9 +1736,7 @@ function getReplanCandidates(scope, targetTask, earliest) {
 
 function compareForReplan(a, b) {
   const deadlineMs = (t) =>
-    t.deadline
-      ? new Date(`${t.deadline}T23:59:59`).getTime()
-      : Infinity;
+    t.deadline ? new Date(`${t.deadline}T23:59:59`).getTime() : Infinity;
 
   const priorityRank = { high: 0, medium: 1, low: 2 };
 
@@ -2234,9 +1769,7 @@ function replanTasks(candidates, earliest) {
     scheduledStart: task.scheduledStart
   }));
 
-  const originals = new Map(
-    undo.map((u) => [u.id, u.scheduledStart])
-  );
+  const originals = new Map(undo.map((u) => [u.id, u.scheduledStart]));
 
   // Free up their old slots so they don't block each other
   ordered.forEach((task) => {
@@ -2265,8 +1798,7 @@ function replanTasks(candidates, earliest) {
     task.scheduledStart = originals.get(task.id);
 
     const deadlinePassed =
-      task.deadline &&
-      new Date(`${task.deadline}T23:59:59`) < now;
+      task.deadline && new Date(`${task.deadline}T23:59:59`) < now;
 
     failed.push({
       task,
@@ -2282,16 +1814,8 @@ function replanTasks(candidates, earliest) {
 
 /* ---------- RUN A REPLAN ---------- */
 
-async function runReplan({
-  scope,
-  targetTask = null,
-  earliest = new Date()
-}) {
-  const candidates = getReplanCandidates(
-    scope,
-    targetTask,
-    earliest
-  );
+async function runReplan({ scope, targetTask = null, earliest = new Date() }) {
+  const candidates = getReplanCandidates(scope, targetTask, earliest);
 
   if (candidates.length === 0) {
     setStatus("Nothing needs replanning. You're all caught up.");
@@ -2506,6 +2030,7 @@ function checkMissedTasks() {
     });
 }
 
+
 /* ---------- 10. MAIN AI HANDLER ---------- */
 
 async function handleAddTask(event) {
@@ -2556,6 +2081,10 @@ async function handleAddTask(event) {
       setStatus("Network error. Check your connection and try again.", true);
     } else if (err.kind === "auth") {
       setStatus("Your session expired. Please sign in again.", true);
+    } else if (err.kind === "forbidden") {
+      setStatus(err.message || "You don't have access to do that.", true);
+    } else if (err.kind === "rate_limit") {
+      setStatus("You're going a bit fast. Please wait a bit and try again.", true);
     } else {
       setStatus("Something went wrong reading that task. Try rephrasing it.", true);
     }
@@ -2564,39 +2093,29 @@ async function handleAddTask(event) {
   }
 }
 
+
 /* ---------- 11. WEEK NAVIGATION ---------- */
 
 function handlePrevWeek() {
-
-  currentWeekStart =
-    addDays(
-      currentWeekStart,
-      -7
-    );
-
+  currentWeekStart = addDays(currentWeekStart, -7);
 
   renderWeekLabel();
-
   renderCalendar();
 }
-
 
 function handleNextWeek() {
-
-  currentWeekStart =
-    addDays(
-      currentWeekStart,
-      7
-    );
-
+  currentWeekStart = addDays(currentWeekStart, 7);
 
   renderWeekLabel();
-
   renderCalendar();
 }
+
+
+/* ---------- SIGN OUT ---------- */
 
 async function handleSignOut() {
   const btn = document.getElementById("signout-btn");
+
   if (btn) btn.disabled = true;
 
   try {
@@ -2605,157 +2124,141 @@ async function handleSignOut() {
     console.error("Sign out failed:", err);
   }
 
-  // Clear cached tasks so the next person on this browser can't see them
+  // Clear cached data so the next person on this browser can't see it
   localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem("plannr_missed_dismissed");
+  localStorage.removeItem(MISSED_DISMISS_KEY);
 
   window.location.href = "index.html";
 }
 
+
 /* ---------- 12. INITIALIZATION ---------- */
 
 function setupApp() {
-
   /* ---------- AI TASK FORM ---------- */
 
-  const taskForm =
-    document.getElementById("task-form");
+  const taskForm = document.getElementById("task-form");
 
   if (taskForm) {
-    taskForm.addEventListener(
-      "submit",
-      handleAddTask
-    );
+    taskForm.addEventListener("submit", handleAddTask);
   }
 
+  /* ---------- WEEK NAVIGATION ---------- */
 
-  /* ---------- PREVIOUS WEEK ---------- */
-
-  const prevWeek =
-    document.getElementById("prev-week");
+  const prevWeek = document.getElementById("prev-week");
 
   if (prevWeek) {
-    prevWeek.addEventListener(
-      "click",
-      handlePrevWeek
-    );
+    prevWeek.addEventListener("click", handlePrevWeek);
   }
 
-
-  /* ---------- NEXT WEEK ---------- */
-
-  const nextWeek =
-    document.getElementById("next-week");
+  const nextWeek = document.getElementById("next-week");
 
   if (nextWeek) {
-    nextWeek.addEventListener(
-      "click",
-      handleNextWeek
-    );
+    nextWeek.addEventListener("click", handleNextWeek);
   }
-
 
   /* ---------- ADD EVENT ---------- */
 
-  const addEventButton =
-    document.getElementById("add-event-btn");
-
-  const eventModal =
-    document.getElementById("event-modal");
-
-  const eventDate =
-    document.getElementById("event-date");
-
-  const eventStart =
-    document.getElementById("event-start");
-
-  const eventEnd =
-    document.getElementById("event-end");
-
+  const addEventButton = document.getElementById("add-event-btn");
+  const eventModal = document.getElementById("event-modal");
+  const eventDate = document.getElementById("event-date");
+  const eventStart = document.getElementById("event-start");
+  const eventEnd = document.getElementById("event-end");
 
   if (addEventButton && eventModal) {
+    addEventButton.addEventListener("click", () => {
+      eventModal.classList.remove("is-hidden");
 
-    addEventButton.addEventListener(
-      "click",
-      () => {
-
-        eventModal.classList.remove(
-          "is-hidden"
-        );
-
-        if (eventDate) {
-          eventDate.value =
-            formatDateISO(new Date());
-        }
-
-        if (eventStart) {
-          eventStart.value = "17:00";
-        }
-
-        if (eventEnd) {
-          eventEnd.value = "18:00";
-        }
-
-      }
-    );
-
+      if (eventDate) eventDate.value = formatDateISO(new Date());
+      if (eventStart) eventStart.value = "17:00";
+      if (eventEnd) eventEnd.value = "18:00";
+    });
   } else {
-
-    console.error(
-      "Plannr: Add Event elements not found."
-    );
-
+    console.error("Plannr: Add Event elements not found.");
   }
 
-
-  /* ---------- CANCEL EVENT ---------- */
-
-  const cancelEventButton =
-    document.getElementById(
-      "cancel-event-btn"
-    );
+  const cancelEventButton = document.getElementById("cancel-event-btn");
 
   if (cancelEventButton && eventModal) {
-
-    cancelEventButton.addEventListener(
-      "click",
-      () => {
-
-        eventModal.classList.add(
-          "is-hidden"
-        );
-
-      }
-    );
-
+    cancelEventButton.addEventListener("click", () => {
+      eventModal.classList.add("is-hidden");
+    });
   }
 
-
-  /* ---------- EVENT FORM ---------- */
-
-  const eventForm =
-    document.getElementById("event-form");
+  const eventForm = document.getElementById("event-form");
 
   if (eventForm) {
-
-    eventForm.addEventListener(
-      "submit",
-      handleAddEvent
-    );
-
+    eventForm.addEventListener("submit", handleAddEvent);
   }
 
-   const signOutBtn = document.getElementById("signout-btn");
+  /* ---------- EDIT / DELETE POPUP ---------- */
 
-   if (signOutBtn) {
-     signOutBtn.addEventListener("click", handleSignOut);
-   }
+  const editForm = document.getElementById("edit-form");
+  const taskModal = document.getElementById("task-modal");
+
+  if (editForm && taskModal) {
+    editForm.addEventListener("submit", handleEditSubmit);
+
+    document
+      .getElementById("edit-cancel-btn")
+      .addEventListener("click", closeTaskModal);
+
+    document
+      .getElementById("edit-delete-btn")
+      .addEventListener("click", handleEditDelete);
+
+    document
+      .getElementById("edit-done-btn")
+      .addEventListener("click", handleEditToggleDone);
+
+    // Click the dark backdrop to close
+    taskModal.addEventListener("click", (e) => {
+      if (e.target === taskModal) closeTaskModal();
+    });
+  } else {
+    console.error("Plannr: Edit popup elements not found.");
+  }
+
+  // Click the backdrop of the Add Event popup to close it too
+  if (eventModal) {
+    eventModal.addEventListener("click", (e) => {
+      if (e.target === eventModal) eventModal.classList.add("is-hidden");
+    });
+  }
+
+  // Escape closes whichever popup is open
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+
+    if (taskModal && !taskModal.classList.contains("is-hidden")) {
+      closeTaskModal();
+    }
+
+    if (eventModal && !eventModal.classList.contains("is-hidden")) {
+      eventModal.classList.add("is-hidden");
+    }
+  });
+
+  /* ---------- SIGN OUT ---------- */
+
+  const signOutBtn = document.getElementById("signout-btn");
+
+  if (signOutBtn) {
+    signOutBtn.addEventListener("click", handleSignOut);
+  }
+
+  // If the session ends (expired, or signed out in another tab), leave the app.
+  supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") {
+      window.location.href = "index.html";
+    }
+  });
 
   /* ---------- INITIAL RENDER ---------- */
 
   loadCalendarData();
-
 }
+
 
 /* Load saved tasks before rendering the calendar */
 
@@ -2771,16 +2274,11 @@ async function loadCalendarData() {
       return;
     }
 
-    const {
-      data: cloudTasks,
-      error: tasksError
-    } = await supabaseClient
+    const { data: cloudTasks, error: tasksError } = await supabaseClient
       .from("tasks")
       .select("*")
       .eq("user_id", user.id)
-      .order("scheduled_start", {
-        ascending: true
-      });
+      .order("scheduled_start", { ascending: true });
 
     if (tasksError) {
       throw tasksError;
@@ -2800,36 +2298,23 @@ async function loadCalendarData() {
       type: task.type || "task"
     }));
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(tasks)
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 
     renderWeekLabel();
     renderCalendar();
     checkMissedTasks();
-
   } catch (error) {
-    console.error(
-      "Plannr calendar failed to load:",
-      error
-    );
+    console.error("Plannr calendar failed to load:", error);
 
-    alert(
-      "The calendar could not load. Please refresh the page and try again."
-    );
+    alert("The calendar could not load. Please refresh the page and try again.");
   }
 }
+
 
 /* Start the app */
 
 if (document.readyState === "loading") {
-  document.addEventListener(
-    "DOMContentLoaded",
-    setupApp
-  );
+  document.addEventListener("DOMContentLoaded", setupApp);
 } else {
   setupApp();
 }
-
-
