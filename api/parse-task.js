@@ -115,6 +115,8 @@ async function getUserFromRequest(req) {
     return null;
   }
 
+  console.log("Auth: checking token against", SUPABASE_URL);
+
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_KEY }
