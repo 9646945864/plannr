@@ -291,13 +291,24 @@
             Password
           </label>
 
-          <input
-            type="password"
-            id="signin-password"
-            class="signin-input"
-            placeholder="••••••••"
-            autocomplete="current-password"
-          >
+          <div class="password-wrap">
+            <input
+              type="password"
+              id="signin-password"
+              class="signin-input"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            >
+            <button
+              type="button"
+              id="toggle-password"
+              class="password-toggle"
+              aria-label="Show password"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
 
 
           <div class="signin-actions">
