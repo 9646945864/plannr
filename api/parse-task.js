@@ -10,8 +10,8 @@ const MODELS = [
 
 const RETRYABLE_STATUS = [429, 500, 503, 504];
 const ATTEMPTS_PER_MODEL = 2;
-const REQUEST_TIMEOUT_MS = 8000;
-const TOTAL_BUDGET_MS = 22000;
+const REQUEST_TIMEOUT_MS = 12000;
+const TOTAL_BUDGET_MS = 26000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -32,7 +32,8 @@ async function callGemini(model, prompt, apiKey) {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0
+            temperature: 0,
+            thinkingConfig: { thinkingBudget: 0 }
           }
         }),
         signal: controller.signal
