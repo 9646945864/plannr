@@ -1264,6 +1264,32 @@ body.landing {
   color: var(--text);
 }
 
+.topbar {
+  position: relative;
+}
+
+.signout-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+
+  padding: 8px 14px;
+
+  border: 1px solid var(--grid-line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.signout-btn:hover {
+  border-color: var(--accent-red);
+}
 .resend-btn:disabled {
   opacity: 0.5;
   cursor: default;
