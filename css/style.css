@@ -485,6 +485,15 @@ body {
   background: rgba(255, 107, 74, 0.12);
 }
 
+button.is-hidden {
+  display: none;
+}
+
+/* When two delete buttons sit side by side, only the last pushes the rest right */
+.btn-danger:has(+ .btn-danger) {
+  margin-right: 0;
+}
+
 /* ============================================================
    INSIGHTS + REPLAN BANNERS
    ============================================================ */
