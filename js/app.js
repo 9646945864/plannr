@@ -130,7 +130,7 @@ async function syncTasksNow() {
         preferred_time: task.preferredTime || null,
         status: task.status || "scheduled",
         priority: task.priority || "medium",
-        type: task.type || "task"
+        type: task.type || "task",
         group_id: task.groupId || null
       }));
 
