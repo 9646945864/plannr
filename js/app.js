@@ -131,6 +131,7 @@ async function syncTasksNow() {
         status: task.status || "scheduled",
         priority: task.priority || "medium",
         type: task.type || "task"
+        group_id: task.groupId || null
       }));
 
       const { error } = await supabaseClient.from("tasks").upsert(rows);
@@ -330,6 +331,11 @@ function scoreTimeSlot(candidateStart, candidateEnd, task, deadline) {
   // Avoid the very end of the day when possible.
   if (hour >= 21) {
     score -= 20;
+  }
+
+  // Sessions of the same task prefer different days.
+  if (task.avoidDates && task.avoidDates.has(candidateDate)) {
+    score -= 80;
   }
 
   const tasksThatDay = tasks.filter((existingTask) => {
@@ -709,6 +715,16 @@ function openTaskModal(taskId) {
   document.getElementById("edit-done-btn").textContent =
     task.status === "done" ? "Mark not done" : "Mark done";
 
+  const groupBtn = document.getElementById("edit-delete-group-btn");
+  const groupCount = task.groupId
+    ? tasks.filter((t) => t.groupId === task.groupId).length
+    : 0;
+
+  if (groupBtn) {
+    groupBtn.classList.toggle("is-hidden", groupCount < 2);
+    groupBtn.textContent = `Delete all ${groupCount}`;
+  }
+
   document.getElementById("task-modal").classList.remove("is-hidden");
 }
 
@@ -822,6 +838,24 @@ function handleEditDelete() {
 
   closeTaskModal();
   setStatus(`Deleted "${title}".`);
+  renderCalendar();
+}
+
+function handleEditDeleteGroup() {
+  const task = tasks.find((t) => t.id === editingTaskId);
+
+  if (!task || !task.groupId) return;
+
+  const count = tasks.filter((t) => t.groupId === task.groupId).length;
+
+  if (!confirm(`Delete all ${count} sessions?`)) return;
+
+  tasks = tasks.filter((t) => t.groupId !== task.groupId);
+
+  saveTasks();
+
+  closeTaskModal();
+  setStatus(`Deleted ${count} sessions.`);
   renderCalendar();
 }
 
@@ -1400,11 +1434,186 @@ function deleteTaskWithAI(parsed) {
   return true;
 }
 
+/* ---------- SPLITTING LONG TASKS INTO SESSIONS ---------- */
+
+const SPLIT_THRESHOLD_MINUTES = 240;   // longer than 4h gets split automatically
+const DEFAULT_SESSION_MINUTES = 120;
+const MAX_SESSION_MINUTES = 240;
+const MAX_SESSIONS = 14;
+
+function shouldSplit(parsed) {
+  const total = Number(parsed.durationMinutes) || 60;
+  const dayWindow = (DAY_END_HOUR - DAY_START_HOUR) * 60;
+  const asked = Number(parsed.sessions) >= 2;
+
+  // An exact date + time that fits in one day stays a single block.
+  if (parsed.date && parsed.time && total <= dayWindow && !asked) {
+    return false;
+  }
+
+  if (asked) return true;
+
+  if (Number(parsed.sessionMinutes) > 0 && Number(parsed.sessionMinutes) < total) {
+    return true;
+  }
+
+  return total > SPLIT_THRESHOLD_MINUTES;
+}
+
+function planSessionLengths(total, { sessions, sessionMinutes }) {
+  const dayWindow = (DAY_END_HOUR - DAY_START_HOUR) * 60;
+  const maxSize = Math.min(MAX_SESSION_MINUTES, dayWindow);
+
+  let size;
+
+  if (Number(sessionMinutes) > 0) {
+    size = Math.round(Number(sessionMinutes) / 30) * 30;
+  } else if (Number(sessions) >= 2) {
+    size = Math.ceil(total / Number(sessions) / 30) * 30;
+  } else {
+    size = DEFAULT_SESSION_MINUTES;
+  }
+
+  size = Math.min(maxSize, Math.max(30, size));
+
+  const lengths = [];
+  let left = total;
+
+  while (left > 0) {
+    const len = Math.min(size, left);
+    lengths.push(len);
+    left -= len;
+  }
+
+  // Fold a tiny leftover into the previous session
+  if (lengths.length > 1 && lengths[lengths.length - 1] < 30) {
+    const extra = lengths.pop();
+    lengths[lengths.length - 1] += extra;
+  }
+
+  return lengths.length > MAX_SESSIONS ? null : lengths;
+}
+
+function formatDuration(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+
+  if (!h) return `${m} min`;
+  if (!m) return `${h} hour${h === 1 ? "" : "s"}`;
+
+  return `${h}h ${m}m`;
+}
+
+async function createSplitTasks(parsed, rawText) {
+  const total = parsed.durationMinutes || 60;
+  const lengths = planSessionLengths(total, parsed);
+
+  if (!lengths) {
+    setStatus(
+      `That would need more than ${MAX_SESSIONS} sessions. Try a smaller total.`,
+      true
+    );
+    return false;
+  }
+
+  // Not worth splitting after all: use the normal single-block path.
+  if (lengths.length < 2) {
+    return createTask(parsed, rawText, false);
+  }
+
+  const baseTitle = parsed.title || rawText;
+  const deadline = parsed.deadline || parsed.date || null;
+  const groupId = crypto.randomUUID();
+  const usedDates = new Set();
+  const created = [];
+
+  for (const length of lengths) {
+    // Each placement is visible to the next, so sessions don't collide.
+    const slot = findOpenSlot({
+      title: baseTitle,
+      durationMinutes: length,
+      deadline,
+      preferredTime: parsed.preferredTime || null,
+      status: "scheduled",
+      priority: parsed.priority || "medium",
+      scheduledStart: null,
+      type: "task",
+      avoidDates: usedDates
+    });
+
+    if (!slot) {
+      // All or nothing: undo the sessions placed so far
+      tasks = tasks.filter((t) => t.groupId !== groupId);
+
+      setStatus(
+        `I couldn't fit all ${formatDuration(total)} ${
+          deadline ? "before that deadline" : "in the next two weeks"
+        }. Try a later deadline or a smaller total.`,
+        true
+      );
+
+      return false;
+    }
+
+    const task = {
+      id: crypto.randomUUID(),
+      groupId,
+      title: baseTitle,
+      durationMinutes: length,
+      deadline: parsed.deadline || null,
+      preferredTime: parsed.preferredTime || null,
+      status: "scheduled",
+      priority: parsed.priority || "medium",
+      scheduledStart: slot,
+      type: "task"
+    };
+
+    tasks.push(task);
+    created.push(task);
+    usedDates.add(slot.slice(0, 10));
+  }
+
+  // Number the sessions in calendar order: "Study chemistry (1/3)"
+  created.sort(
+    (a, b) => new Date(a.scheduledStart) - new Date(b.scheduledStart)
+  );
+
+  created.forEach((task, i) => {
+    task.title = `${baseTitle} (${i + 1}/${created.length})`;
+  });
+
+  await saveTasks();
+
+  currentWeekStart = getStartOfWeek(new Date(created[0].scheduledStart));
+
+  const when = created
+    .map((task) =>
+      new Date(task.scheduledStart).toLocaleString(undefined, {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit"
+      })
+    )
+    .join(", ");
+
+  setStatus(
+    `Scheduled ${created.length} sessions (${formatDuration(total)} total): ${when}.`
+  );
+
+  renderWeekLabel();
+  renderCalendar();
+
+  return true;
+}
 
 /* ---------- CREATE TASK ---------- */
 
-async function createTask(parsed, rawText) {
+async function createTask(parsed, rawText, allowSplit = true) {
   const durationMinutes = parsed.durationMinutes || 60;
+  // Long or explicitly split work becomes several sessions.
+  if (allowSplit && shouldSplit(parsed)) {
+    return createSplitTasks(parsed, rawText);
+  }
 
   // The calendar only shows DAY_START_HOUR to DAY_END_HOUR.
   if (durationMinutes > (DAY_END_HOUR - DAY_START_HOUR) * 60) {
@@ -1539,7 +1748,9 @@ async function parseTaskWithAI(rawText, onRetry) {
         },
         body: JSON.stringify({
           text: rawText,
-          today: formatDateISO(new Date())
+          today: formatDateISO(new Date()),
+          nowTime: formatTimeInput(new Date()),
+          features: ["split"]
         })
       });
     } catch (networkErr) {
@@ -2206,6 +2417,12 @@ function setupApp() {
     document
       .getElementById("edit-delete-btn")
       .addEventListener("click", handleEditDelete);
+
+    const groupDeleteBtn = document.getElementById("edit-delete-group-btn");
+
+    if (groupDeleteBtn) {
+      groupDeleteBtn.addEventListener("click", handleEditDeleteGroup);
+    }
 
     document
       .getElementById("edit-done-btn")
