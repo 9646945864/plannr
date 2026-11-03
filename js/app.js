@@ -250,6 +250,12 @@ function findOpenSlot(task) {
 
       if (candidateStart < now) continue;
       if (task.earliestStart && candidateStart < task.earliestStart) continue;
+      
+       if (
+        task.excludeDates &&
+        task.excludeDates.has(formatDateISO(candidateStart))
+      ) continue;
+       
       if (candidateEnd > deadline) continue;
 
       if (!isSlotFree(candidateStart, candidateEnd)) {
@@ -1440,6 +1446,7 @@ const SPLIT_THRESHOLD_MINUTES = 240;   // longer than 4h gets split automaticall
 const DEFAULT_SESSION_MINUTES = 120;
 const MAX_SESSION_MINUTES = 240;
 const MAX_SESSIONS = 14;
+const MIN_SESSION_MINUTES = 60;
 
 function shouldSplit(parsed) {
   const total = Number(parsed.durationMinutes) || 60;
@@ -1474,7 +1481,10 @@ function planSessionLengths(total, { sessions, sessionMinutes }) {
     size = DEFAULT_SESSION_MINUTES;
   }
 
-  size = Math.min(maxSize, Math.max(30, size));
+  // Never go below the minimum, even if the AI asked for it.
+  // (If the total itself is smaller, use the total.)
+  size = Math.min(maxSize, Math.max(MIN_SESSION_MINUTES, size));
+  size = Math.min(size, total);
 
   const lengths = [];
   let left = total;
@@ -1485,8 +1495,11 @@ function planSessionLengths(total, { sessions, sessionMinutes }) {
     left -= len;
   }
 
-  // Fold a tiny leftover into the previous session
-  if (lengths.length > 1 && lengths[lengths.length - 1] < 30) {
+  // Fold a short leftover into the previous session
+  if (
+    lengths.length > 1 &&
+    lengths[lengths.length - 1] < MIN_SESSION_MINUTES
+  ) {
     const extra = lengths.pop();
     lengths[lengths.length - 1] += extra;
   }
@@ -1529,7 +1542,7 @@ async function createSplitTasks(parsed, rawText) {
 
   for (const length of lengths) {
     // Each placement is visible to the next, so sessions don't collide.
-    const slot = findOpenSlot({
+    const slotTask = {
       title: baseTitle,
       durationMinutes: length,
       deadline,
@@ -1537,10 +1550,16 @@ async function createSplitTasks(parsed, rawText) {
       status: "scheduled",
       priority: parsed.priority || "medium",
       scheduledStart: null,
-      type: "task",
-      avoidDates: usedDates
-    });
+      type: "task"
+    };
 
+    // First choice: a day with no session yet.
+    let slot = findOpenSlot({ ...slotTask, excludeDates: usedDates });
+
+    // Not enough free days: allow a repeat day, with a scoring penalty.
+    if (!slot) {
+      slot = findOpenSlot({ ...slotTask, avoidDates: usedDates });
+    }
     if (!slot) {
       // All or nothing: undo the sessions placed so far
       tasks = tasks.filter((t) => t.groupId !== groupId);
