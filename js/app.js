@@ -1426,10 +1426,35 @@ function deleteTaskWithAI(parsed) {
     return false;
   }
 
-  const taskTitle = task.title;
-  const taskId = task.id;
+  // "delete write essay (2/4)" or "delete session 2" means just that one.
+  const namesOneSession =
+    /\(\s*\d+\s*\/\s*\d+\s*\)|\b(session|part)\s*\d+\b/i.test(
+      parsed.targetTitle
+    );
 
-  tasks = tasks.filter((item) => item.id !== taskId);
+  // Part of a split task: remove every session in the group.
+  if (task.groupId && !namesOneSession) {
+    const groupTasks = tasks.filter((t) => t.groupId === task.groupId);
+
+    // Use the shared name without the "(1/4)" suffix
+    const baseName = task.title.replace(/\s*\(\d+\/\d+\)\s*$/, "");
+
+    tasks = tasks.filter((t) => t.groupId !== task.groupId);
+
+    saveTasks();
+
+    setStatus(
+      `Deleted all ${groupTasks.length} sessions of "${baseName}".`
+    );
+
+    renderCalendar();
+
+    return true;
+  }
+
+  const taskTitle = task.title;
+
+  tasks = tasks.filter((item) => item.id !== task.id);
 
   saveTasks();
 
