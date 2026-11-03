@@ -636,6 +636,84 @@ ${JSON.stringify(text)}
 
 /* ---------- OUTPUT SANITIZERS ---------- */
 
+const NUMBER_WORDS = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+  seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12
+};
+
+const toNumber = (s) => {
+  const v = String(s).toLowerCase();
+
+  if (NUMBER_WORDS[v] !== undefined) return NUMBER_WORDS[v];
+
+  const n = Number(v);
+
+  return Number.isFinite(n) ? n : null;
+};
+
+/*
+   Reads split details straight from the user's own words,
+   so the model can't invent them.
+*/
+function extractSplitHints(text) {
+  const t = String(text || "");
+
+  const numWord =
+    "\\d+(?:\\.\\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
+
+  let sessions = null;
+
+  // "in 2 sessions", "3 chunks", "four blocks"
+  const sessionMatch = t.match(
+    new RegExp(
+      `\\b(${numWord})\\s+(?:separate\\s+|shorter\\s+|short\\s+)?(?:sessions?|chunks?|blocks?|parts?|sittings?)\\b`,
+      "i"
+    )
+  );
+
+  if (sessionMatch) {
+    const n = toNumber(sessionMatch[1]);
+
+    if (Number.isInteger(n) && n >= 2 && n <= 14) sessions = n;
+  }
+
+  // "over 3 days", "across 4 days" (not "in 3 days", which means a deadline)
+  if (!sessions) {
+    const dayMatch = t.match(
+      new RegExp(`\\b(?:over|across)\\s+(${numWord})\\s+days?\\b`, "i")
+    );
+
+    if (dayMatch) {
+      const n = toNumber(dayMatch[1]);
+
+      if (Number.isInteger(n) && n >= 2 && n <= 14) sessions = n;
+    }
+  }
+
+  let sessionMinutes = null;
+
+  // "1 hour at a time", "90 minutes per session"
+  const lengthMatch = t.match(
+    new RegExp(
+      `\\b(${numWord})\\s*(hours?|hrs?|h|minutes?|mins?)\\s+(?:at a time|each|per session|a session|per day|a day|every day|each day|per sitting|a sitting)\\b`,
+      "i"
+    )
+  );
+
+  if (lengthMatch) {
+    const n = toNumber(lengthMatch[1]);
+    const unit = /^h/i.test(lengthMatch[2]) ? 60 : 1;
+
+    if (n !== null) {
+      const minutes = Math.round(n * unit);
+
+      if (minutes >= 15 && minutes <= 480) sessionMinutes = minutes;
+    }
+  }
+
+  return { sessions, sessionMinutes };
+}
+
 function sanitizeCommand(parsed, features, userText) {
   const allowedActions = ["create", "reschedule", "delete", "complete", "replan"];
 
@@ -677,13 +755,34 @@ function sanitizeCommand(parsed, features, userText) {
   };
 
   if (features.has("split")) {
-    // Only trust these if the user's own words mention splitting.
-    const userAskedToSplit = SPLIT_WORDS.test(userText);
+    const hints = extractSplitHints(userText);
 
-    out.sessions = userAskedToSplit ? clampInt(parsed.sessions, 2, 14, null) : null;
-    out.sessionMinutes = userAskedToSplit
+    const userAskedToSplit =
+      SPLIT_WORDS.test(userText) || hints.sessions || hints.sessionMinutes;
+
+    let sessions = userAskedToSplit
+      ? clampInt(parsed.sessions, 2, 14, null)
+      : null;
+
+    let sessionMinutes = userAskedToSplit
       ? clampInt(parsed.sessionMinutes, 15, 480, null)
       : null;
+
+    if (hints.sessions) {
+      // "in 2 sessions": the user's number wins, and the model's length is dropped
+      sessions = hints.sessions;
+      sessionMinutes = hints.sessionMinutes || null;
+    } else if (hints.sessionMinutes) {
+      // "1 hour at a time": the user's length wins
+      sessionMinutes = hints.sessionMinutes;
+      sessions = null;
+    } else if (sessions && sessionMinutes) {
+      // The model should set only one of them
+      sessionMinutes = null;
+    }
+
+    out.sessions = sessions;
+    out.sessionMinutes = sessionMinutes;
   }
 
   if (features.has("recurrence")) {
