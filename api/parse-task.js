@@ -14,9 +14,16 @@ export const config = {
    - "recurrence" repeating events
    - "query"      questions about the calendar + "clear a day"
 
+   Optional context the client may send:
+   - today ("YYYY-MM-DD"), nowTime ("HH:mm")
+   - settings { dayStartHour, dayEndHour }
+
    Protected by: Supabase auth, confirmed email, input size caps,
-   and per-user rate limits (Upstash/Vercel KV, or in-memory fallback).
+   per-user rate limits (Upstash/Vercel KV, or in-memory fallback),
+   and server-side guards against the model inventing options.
    ============================================================ */
+
+const API_VERSION = 3;
 
 
 /* ---------- GEMINI CONFIG ---------- */
@@ -96,11 +103,7 @@ async function callGemini(
   }
 }
 
-async function generateWithFallback(
-  prompt,
-  apiKey,
-  { budgetMs, perCallMs }
-) {
+async function generateWithFallback(prompt, apiKey, { budgetMs, perCallMs }) {
   const startedAt = Date.now();
   const timeLeft = () => budgetMs - (Date.now() - startedAt);
 
@@ -397,6 +400,17 @@ const QUERY_TYPES = ["agenda", "free_time", "next", "summary"];
 const REPEAT_TYPES = ["daily", "weekdays", "weekly", "monthly"];
 const IMPORT_KINDS = ["exam", "quiz", "assignment", "project", "reading", "other"];
 
+/*
+   Guards against the model inventing options the user never asked for.
+   The model only gets to set these fields if the user's own words
+   actually mention the idea.
+*/
+const SPLIT_WORDS =
+  /\b(sessions?|split|spread|spaced|chunks?|at a time|per day|each day|a day|every day|across|over (the|a few|several|\d+) )/i;
+
+const REPEAT_WORDS =
+  /\b(every|each|daily|weekly|monthly|weekdays?|repeat(s|ing)?|recurring|regularly)\b/i;
+
 
 /* ---------- PROMPTS ---------- */
 
@@ -439,6 +453,7 @@ function buildCommandPrompt({
 
   if (features.has("query")) {
     template.queryType = null;
+    template.targetDate = null;
   }
 
   const actions = features.has("query")
@@ -453,18 +468,25 @@ Long tasks (create):
   split or spread the work (e.g. "in 3 sessions", "spread over the week"). Otherwise null.
 - sessionMinutes: length of each session, ONLY if the user states it
   (e.g. "1 hour at a time" = 60). Otherwise null.
+- Do NOT invent sessions or sessionMinutes. Never copy numbers like slot sizes
+  or hours into them.
+  Example: "Study chemistry 6 hours before Friday" -> durationMinutes 360,
+  sessions null, sessionMinutes null (the user did not ask to split it).
+  Example: "Write essay 4 hours in 2 sessions" -> durationMinutes 240, sessions 2.
+  Example: "Read 3 hours, 1 hour at a time" -> durationMinutes 180, sessionMinutes 60.
 `
     : "";
 
   const recurrenceSection = features.has("recurrence")
     ? `
 Repeating items (create):
-- repeat: "daily", "weekdays", "weekly", or "monthly" if the user says it repeats
-  ("every Monday", "daily", "each weekday"). Otherwise null.
+- repeat: "daily", "weekdays", "weekly", or "monthly" ONLY if the user says it
+  repeats ("every Monday", "daily", "each weekday"). Otherwise null.
 - repeatDays: for weekly repeats on specific weekdays, an array of numbers
   where 0=Sunday ... 6=Saturday ("every Mon and Wed" = [1, 3]). Otherwise null.
 - repeatUntil: YYYY-MM-DD ONLY if the user gives an end date. Otherwise null.
 - For repeating items, date and time describe the first occurrence.
+- A single task with no repeating words must have repeat null.
 `
     : "";
 
@@ -480,12 +502,14 @@ For query:
 For clear:
 - Use clear when the user wants to empty a day or move everything off it.
 - date: the day to clear.
+- targetDate: the day to move things to, ONLY if the user names one. Otherwise null.
 
 Query and clear examples:
 "What does my Thursday look like?" -> action query, queryType "agenda", date of that Thursday
 "When am I free tomorrow afternoon?" -> action query, queryType "free_time", date tomorrow, preferredTime "afternoon"
 "What's next?" -> action query, queryType "next"
 "Clear my Friday" -> action clear, date of that Friday
+"Move everything on Friday to Monday" -> action clear, date of that Friday, targetDate of that Monday
 `
     : "";
 
@@ -612,14 +636,18 @@ ${JSON.stringify(text)}
 
 /* ---------- OUTPUT SANITIZERS ---------- */
 
-function sanitizeCommand(parsed, features) {
+function sanitizeCommand(parsed, features, userText) {
   const allowedActions = ["create", "reschedule", "delete", "complete", "replan"];
 
   if (features.has("query")) {
     allowedActions.push("query", "clear");
   }
 
-  if (!parsed || typeof parsed !== "object" || !allowedActions.includes(parsed.action)) {
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !allowedActions.includes(parsed.action)
+  ) {
     return null;
   }
 
@@ -641,40 +669,49 @@ function sanitizeCommand(parsed, features) {
       ? parsed.replanScope
       : null,
     shiftMinutes:
-      Number.isFinite(Number(parsed.shiftMinutes)) && Number(parsed.shiftMinutes) > 0
+      Number.isFinite(Number(parsed.shiftMinutes)) &&
+      Number(parsed.shiftMinutes) > 0
         ? clampInt(parsed.shiftMinutes, 1, 24 * 60, null)
         : null,
     availableFrom: isTime(parsed.availableFrom) ? parsed.availableFrom : null
   };
 
   if (features.has("split")) {
-    out.sessions = clampInt(parsed.sessions, 2, 14, null);
-    out.sessionMinutes = clampInt(parsed.sessionMinutes, 15, 480, null);
+    // Only trust these if the user's own words mention splitting.
+    const userAskedToSplit = SPLIT_WORDS.test(userText);
+
+    out.sessions = userAskedToSplit ? clampInt(parsed.sessions, 2, 14, null) : null;
+    out.sessionMinutes = userAskedToSplit
+      ? clampInt(parsed.sessionMinutes, 15, 480, null)
+      : null;
   }
 
   if (features.has("recurrence")) {
-    out.repeat = REPEAT_TYPES.includes(parsed.repeat) ? parsed.repeat : null;
+    // Only trust these if the user's own words mention repeating.
+    const userAskedToRepeat = REPEAT_WORDS.test(userText);
 
-    out.repeatDays = Array.isArray(parsed.repeatDays)
-      ? [
-          ...new Set(
-            parsed.repeatDays
-              .map((n) => Number(n))
-              .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
-          )
-        ].sort()
-      : null;
+    out.repeat =
+      userAskedToRepeat && REPEAT_TYPES.includes(parsed.repeat)
+        ? parsed.repeat
+        : null;
+
+    out.repeatDays =
+      out.repeat === "weekly" && Array.isArray(parsed.repeatDays)
+        ? [
+            ...new Set(
+              parsed.repeatDays
+                .map((n) => Number(n))
+                .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+            )
+          ].sort()
+        : null;
 
     if (out.repeatDays && out.repeatDays.length === 0) {
       out.repeatDays = null;
     }
 
-    out.repeatUntil = isDate(parsed.repeatUntil) ? parsed.repeatUntil : null;
-
-    // Day lists only make sense for weekly repeats
-    if (out.repeat !== "weekly") {
-      out.repeatDays = null;
-    }
+    out.repeatUntil =
+      out.repeat && isDate(parsed.repeatUntil) ? parsed.repeatUntil : null;
   }
 
   if (features.has("query")) {
@@ -686,6 +723,11 @@ function sanitizeCommand(parsed, features) {
     if (out.action === "query" && !out.queryType) {
       out.queryType = "agenda";
     }
+
+    out.targetDate =
+      out.action === "clear" && isDate(parsed.targetDate)
+        ? parsed.targetDate
+        : null;
   }
 
   return out;
@@ -807,7 +849,8 @@ export default async function handler(req, res) {
 
   const nowTime = isTime(body.nowTime) ? body.nowTime : null;
 
-  const settings = body.settings && typeof body.settings === "object" ? body.settings : {};
+  const settings =
+    body.settings && typeof body.settings === "object" ? body.settings : {};
 
   let dayStartHour = clampInt(settings.dayStartHour, 0, 23, 7);
   let dayEndHour = clampInt(settings.dayEndHour, 1, 24, 22);
@@ -894,16 +937,22 @@ export default async function handler(req, res) {
           .json({ error: "Gemini returned invalid import data." });
       }
 
-      return res.status(200).json({ action: "import", items });
+      return res.status(200).json({
+        action: "import",
+        items,
+        apiVersion: API_VERSION
+      });
     }
 
-    const clean = sanitizeCommand(parsed, features);
+    const clean = sanitizeCommand(parsed, features, text);
 
     if (!clean) {
       return res
         .status(502)
         .json({ error: "Gemini returned an unsupported action." });
     }
+
+    clean.apiVersion = API_VERSION;
 
     return res.status(200).json(clean);
   } catch (error) {
