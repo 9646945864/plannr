@@ -3704,6 +3704,35 @@ function setImportStatus(message, isError = false) {
   el.classList.toggle("is-error", isError);
 }
 
+// Long syllabi are read in small pieces so each request stays fast.
+function splitIntoChunks(text, maxLen = 2800) {
+  const chunks = [];
+  let current = "";
+
+  const push = () => {
+    if (current.trim()) chunks.push(current.trim());
+    current = "";
+  };
+
+  text.split(/\r?\n/).forEach((line) => {
+    // A single very long line gets cut into pieces.
+    while (line.length > maxLen) {
+      if (current) push();
+
+      chunks.push(line.slice(0, maxLen));
+      line = line.slice(maxLen);
+    }
+
+    if (current.length + line.length + 1 > maxLen) push();
+
+    current += (current ? "\n" : "") + line;
+  });
+
+  push();
+
+  return chunks;
+}
+
 async function findImportItems() {
   const textEl = document.getElementById("import-text");
   const text = textEl ? textEl.value.trim() : "";
@@ -3717,34 +3746,79 @@ async function findImportItems() {
 
   if (findBtn) findBtn.disabled = true;
 
-  setImportStatus("Reading it…");
-
   document.getElementById("import-results").innerHTML = "";
   document.getElementById("import-add").classList.add("is-hidden");
 
-  try {
-    const data = await callParseAPI(
-      { text, mode: "import" },
-      { maxAttempts: 1 }
-    );
+  const chunks = splitIntoChunks(text);
+  const found = [];
+  const seen = new Set();
 
-    importItems = Array.isArray(data.items) ? data.items : [];
+  let failedParts = 0;
+  let stopMessage = null;
+
+  try {
+    for (let i = 0; i < chunks.length; i++) {
+      setImportStatus(
+        chunks.length > 1
+          ? `Reading part ${i + 1} of ${chunks.length}…`
+          : "Reading it…"
+      );
+
+      try {
+        const data = await callParseAPI(
+          { text: chunks[i], mode: "import" },
+          { maxAttempts: 1 }
+        );
+
+        (Array.isArray(data.items) ? data.items : []).forEach((item) => {
+          const key = `${String(item.title).toLowerCase()}|${item.date}`;
+
+          if (!seen.has(key)) {
+            seen.add(key);
+            found.push(item);
+          }
+        });
+      } catch (err) {
+        console.error(err);
+
+        // Problems that would hit every part: stop here.
+        if (["auth", "forbidden", "rate_limit", "network"].includes(err.kind)) {
+          stopMessage = describeAIError(err);
+          break;
+        }
+
+        failedParts++;
+
+        // Keep the server's own explanation (e.g. "took too long").
+        if (!stopMessage && err.message) stopMessage = err.message;
+      }
+    }
+
+    importItems = found.sort((a, b) => a.date.localeCompare(b.date));
 
     if (!importItems.length) {
-      setImportStatus("I couldn't find any dated items in that.", true);
+      setImportStatus(
+        stopMessage ||
+          "I couldn't find any dated items in that. Try including the dates.",
+        true
+      );
       return;
     }
 
     renderImportResults();
 
+    const note = failedParts
+      ? ` ${failedParts} part${failedParts === 1 ? "" : "s"} couldn't be read, so paste ${failedParts === 1 ? "it" : "those"} again to add the rest.`
+      : stopMessage
+        ? ` ${stopMessage}`
+        : "";
+
     setImportStatus(
-      `Found ${importItems.length} item${importItems.length === 1 ? "" : "s"}. Untick anything you don't want, and adjust prep time if needed.`
+      `Found ${importItems.length} item${importItems.length === 1 ? "" : "s"}. Untick anything you don't want, and adjust prep time if needed.${note}`,
+      Boolean(failedParts || stopMessage)
     );
 
     document.getElementById("import-add").classList.remove("is-hidden");
-  } catch (err) {
-    console.error(err);
-    setImportStatus(describeAIError(err), true);
   } finally {
     if (findBtn) findBtn.disabled = false;
   }
