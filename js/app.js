@@ -1036,6 +1036,29 @@ function placeBlockedOnGrid() {
   });
 }
 
+/* ---------- TITLE DISPLAY ----------
+
+   Imported calendars (Canvas, school portals) end titles with a
+   bracketed course name, e.g. "Quiz 2.5 [AP Precalculus (2A047X0800)]".
+   Blocks show the short part; the popup and hover text show it all.
+*/
+
+function displayTitle(title) {
+  const t = String(title || "");
+  const short = t.replace(/\s*\[[^\]]*\]\s*$/, "").trim();
+
+  return short || t;
+}
+
+function courseFromTitle(title) {
+  const m = String(title || "").match(/\[([^\]]*)\]\s*$/);
+
+  if (!m) return "";
+
+  // Drop a trailing section code like "(2A047X0800)"
+  return m[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
 function placeTasksOnGrid() {
   const columnsByDate = {};
 
@@ -1098,12 +1121,24 @@ function placeTasksOnGrid() {
       (task.status === "done" ? " is-done" : "");
 
     block.dataset.taskId = task.id;
+    const blockHeight = Math.max(heightPx, 20);
+
     block.style.top = `${topPx}px`;
-    block.style.height = `${Math.max(heightPx, 20)}px`;
+    block.style.height = `${blockHeight}px`;
+
+    // Short blocks show everything on one line; tall ones get a course line.
+    if (blockHeight < 44) block.classList.add("is-short");
+
+    const course = courseFromTitle(task.title);
+    const end = getTaskEnd(task);
+
+    // Hovering shows the full title and time range.
+    block.title = `${task.title}\n${formatTimeShort(start)} – ${formatTimeShort(end)}`;
 
     block.innerHTML = `
-      <span class="task-title">${escapeHTML(task.title)}</span>
+      <span class="task-title">${escapeHTML(displayTitle(task.title))}</span>
       <span class="task-time">${formatTimeShort(start)}</span>
+      ${course && blockHeight >= 72 ? `<span class="task-course">${escapeHTML(course)}</span>` : ""}
       <span class="resize-handle" aria-hidden="true"></span>
     `;
 
