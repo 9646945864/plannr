@@ -786,13 +786,60 @@ summary:focus-visible {
 .task-block .task-title {
   font-weight: 500;
   color: var(--text);
-  display: block;
+
+  /* Long titles wrap to two lines, then end with "…" */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .task-block .task-time {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
+}
+
+.task-block .task-time {
+  display: block;
+}
+
+.task-block .task-course {
+  display: block;
+  overflow: hidden;
+
+  margin-top: 2px;
+
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Short blocks (under ~45px): one line, title then time */
+.task-block.is-short {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.task-block.is-short .task-title {
+  display: block;
+  flex: 1;
+  min-width: 0;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-block.is-short .task-time {
+  flex-shrink: 0;
 }
 
 /* Drag to resize handle (bottom edge) */
