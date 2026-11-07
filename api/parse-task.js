@@ -246,12 +246,12 @@ const LIMITS = {
     {
       name: "hour",
       windowSec: 3600,
-      max: Number(process.env.IMPORT_LIMIT_PER_HOUR) || 5
+      max: Number(process.env.IMPORT_LIMIT_PER_HOUR) || 15
     },
     {
       name: "day",
       windowSec: 86400,
-      max: Number(process.env.IMPORT_LIMIT_PER_DAY) || 15
+      max: Number(process.env.IMPORT_LIMIT_PER_DAY) || 40
     }
   ]
 };
@@ -392,8 +392,9 @@ const clampInt = (v, min, max, fallback = null) => {
 
 const MAX_TOTAL_MINUTES = 6000; // 100 hours of total work in one request
 const MAX_COMMAND_CHARS = Number(process.env.MAX_COMMAND_CHARS) || 500;
-const MAX_IMPORT_CHARS = Number(process.env.MAX_IMPORT_CHARS) || 8000;
-const MAX_IMPORT_ITEMS = 60;
+// The client sends long syllabi in pieces of about 2,800 characters.
+const MAX_IMPORT_CHARS = Number(process.env.MAX_IMPORT_CHARS) || 4000;
+const MAX_IMPORT_ITEMS = 40;
 
 const ALLOWED_FEATURES = ["split", "recurrence", "query"];
 const QUERY_TYPES = ["agenda", "free_time", "next", "summary"];
@@ -636,84 +637,6 @@ ${JSON.stringify(text)}
 
 /* ---------- OUTPUT SANITIZERS ---------- */
 
-const NUMBER_WORDS = {
-  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
-  seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12
-};
-
-const toNumber = (s) => {
-  const v = String(s).toLowerCase();
-
-  if (NUMBER_WORDS[v] !== undefined) return NUMBER_WORDS[v];
-
-  const n = Number(v);
-
-  return Number.isFinite(n) ? n : null;
-};
-
-/*
-   Reads split details straight from the user's own words,
-   so the model can't invent them.
-*/
-function extractSplitHints(text) {
-  const t = String(text || "");
-
-  const numWord =
-    "\\d+(?:\\.\\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
-
-  let sessions = null;
-
-  // "in 2 sessions", "3 chunks", "four blocks"
-  const sessionMatch = t.match(
-    new RegExp(
-      `\\b(${numWord})\\s+(?:separate\\s+|shorter\\s+|short\\s+)?(?:sessions?|chunks?|blocks?|parts?|sittings?)\\b`,
-      "i"
-    )
-  );
-
-  if (sessionMatch) {
-    const n = toNumber(sessionMatch[1]);
-
-    if (Number.isInteger(n) && n >= 2 && n <= 14) sessions = n;
-  }
-
-  // "over 3 days", "across 4 days" (not "in 3 days", which means a deadline)
-  if (!sessions) {
-    const dayMatch = t.match(
-      new RegExp(`\\b(?:over|across)\\s+(${numWord})\\s+days?\\b`, "i")
-    );
-
-    if (dayMatch) {
-      const n = toNumber(dayMatch[1]);
-
-      if (Number.isInteger(n) && n >= 2 && n <= 14) sessions = n;
-    }
-  }
-
-  let sessionMinutes = null;
-
-  // "1 hour at a time", "90 minutes per session"
-  const lengthMatch = t.match(
-    new RegExp(
-      `\\b(${numWord})\\s*(hours?|hrs?|h|minutes?|mins?)\\s+(?:at a time|each|per session|a session|per day|a day|every day|each day|per sitting|a sitting)\\b`,
-      "i"
-    )
-  );
-
-  if (lengthMatch) {
-    const n = toNumber(lengthMatch[1]);
-    const unit = /^h/i.test(lengthMatch[2]) ? 60 : 1;
-
-    if (n !== null) {
-      const minutes = Math.round(n * unit);
-
-      if (minutes >= 15 && minutes <= 480) sessionMinutes = minutes;
-    }
-  }
-
-  return { sessions, sessionMinutes };
-}
-
 function sanitizeCommand(parsed, features, userText) {
   const allowedActions = ["create", "reschedule", "delete", "complete", "replan"];
 
@@ -755,34 +678,13 @@ function sanitizeCommand(parsed, features, userText) {
   };
 
   if (features.has("split")) {
-    const hints = extractSplitHints(userText);
+    // Only trust these if the user's own words mention splitting.
+    const userAskedToSplit = SPLIT_WORDS.test(userText);
 
-    const userAskedToSplit =
-      SPLIT_WORDS.test(userText) || hints.sessions || hints.sessionMinutes;
-
-    let sessions = userAskedToSplit
-      ? clampInt(parsed.sessions, 2, 14, null)
-      : null;
-
-    let sessionMinutes = userAskedToSplit
+    out.sessions = userAskedToSplit ? clampInt(parsed.sessions, 2, 14, null) : null;
+    out.sessionMinutes = userAskedToSplit
       ? clampInt(parsed.sessionMinutes, 15, 480, null)
       : null;
-
-    if (hints.sessions) {
-      // "in 2 sessions": the user's number wins, and the model's length is dropped
-      sessions = hints.sessions;
-      sessionMinutes = hints.sessionMinutes || null;
-    } else if (hints.sessionMinutes) {
-      // "1 hour at a time": the user's length wins
-      sessionMinutes = hints.sessionMinutes;
-      sessions = null;
-    } else if (sessions && sessionMinutes) {
-      // The model should set only one of them
-      sessionMinutes = null;
-    }
-
-    out.sessions = sessions;
-    out.sessionMinutes = sessionMinutes;
   }
 
   if (features.has("recurrence")) {
@@ -992,6 +894,15 @@ export default async function handler(req, res) {
     });
 
     if (!result.ok) {
+      // A timeout on import usually means the text was too big for one call.
+      if (mode === "import" && result.status === 504) {
+        return res.status(504).json({
+          error:
+            "That part took too long to read. Try pasting a smaller piece of the syllabus.",
+          retryable: false
+        });
+      }
+
       if (RETRYABLE_STATUS.includes(result.status) || result.status === 404) {
         return res.status(503).json({
           error: "The AI is busy right now. Please try again shortly.",
